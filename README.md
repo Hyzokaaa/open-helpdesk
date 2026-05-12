@@ -19,25 +19,28 @@ The open-source helpdesk for modern teams. Everything you need, nothing you don'
 Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams that want powerful support tools without the complexity of enterprise solutions.
 
 **Why Open Helpdesk?**
-- Zendesk costs $55/agent and takes a week to configure
-- osTicket looks like it was built in 2008
-- Freshdesk has 200 settings you'll never touch
-
-Open Helpdesk gives you everything that actually matters — in a clean, beautiful interface anyone understands in 2 minutes.
+- **Simple** — clean, modern interface anyone understands in minutes
+- **Open** — self-host with full control, or use our managed cloud
+- **Complete** — all the features your team needs, ready out of the box
+- **Affordable** — generous free tier, transparent pricing, no per-agent surprises
 
 ## Features
 
-- **Ticket Management** — Full lifecycle: create, assign, track, resolve, close. Soft delete, status transitions, priority, categories
-- **Roles & Permissions** — 20 granular permissions across 3 roles (Admin, Agent, Reporter). System admin for global management
-- **Workspaces** — Multi-tenant isolation with slug URLs. Each workspace has its own tickets, tags, members
-- **@Mentions & Comments** — Mention teammates in comments with autocomplete. XSS-sanitized content
-- **Email Notifications** — Configurable per-event (ticket created, assigned, status changed, comment). SMTP and Postmark support
-- **In-App Notifications** — Bell icon with real-time polling, mark as read, per-event preferences
-- **File Attachments** — S3-compatible storage, drag & drop, clipboard paste, image lightbox with zoom/pan
+- **Ticket Management** — Full lifecycle: create, assign, track, resolve, discard. Priority, categories, custom fields
+- **Reports & CSAT** — Resolution metrics, agent performance, charts, and customer satisfaction surveys
+- **Canned Responses** — Predefined replies with "/" quick inserter for faster agent responses
+- **Custom Fields** — 6 field types (text, number, select, multi-select, date, checkbox) per workspace
+- **Audit Log** — Track every action across your workspace with detailed metadata
+- **Roles & Permissions** — 20+ granular permissions across 3 roles (Admin, Agent, Reporter)
+- **Workspaces** — Multi-tenant isolation with custom color palettes and branding
+- **Invitations** — Invite team members by email with batch support and auto-accept on signup
+- **Comments & Mentions** — Mention teammates with autocomplete. XSS-sanitized content
+- **Email Notifications** — Configurable per-event with SMTP support
+- **In-App Notifications** — Real-time polling, mark as read, per-event preferences
+- **File Attachments** — S3-compatible storage, drag & drop, clipboard paste, image lightbox
 - **Tags** — Color-coded tags per workspace for flexible organization
 - **Dark Mode** — 5 theme options: System, Light, Light Border, Dark, Dark Deep
 - **i18n** — Full English and Spanish translations, including email templates
-- **Settings** — Modular settings: Account, Security, Preferences, Notifications
 
 ## Tech Stack
 
@@ -54,73 +57,43 @@ Open Helpdesk gives you everything that actually matters — in a clean, beautif
 
 | Repository | Description |
 |-----------|-------------|
-| [open-helpdesk-backend](https://github.com/Hyzokaaa/open-helpdesk-backend) | NestJS API — clean architecture, domain services, 68+ unit tests |
+| [open-helpdesk-backend](https://github.com/Hyzokaaa/open-helpdesk-backend) | NestJS API — clean architecture, domain services, unit tests |
 | [open-helpdesk-client](https://github.com/Hyzokaaa/open-helpdesk-client) | React SPA — custom UI components, i18n, dark mode |
+| [open-helpdesk-landing](https://github.com/Hyzokaaa/open-helpdesk-landing) | Landing page — GitHub Pages |
 
 ## Get Started
 
-### Option 1: Managed Hosting (Coming Soon)
+### Option 1: Managed Cloud
 
-Sign up at [openhelpdesk.dev](#) and get a free workspace in 30 seconds. No credit card required.
+Sign up at [openhelpdesk.dev](https://openhelpdesk.dev) and get a free workspace in 30 seconds. No credit card required.
 
 ### Option 2: Self-Hosting
 
-Clone both repositories and run with Docker:
-
 ```bash
-# Clone
-git clone https://github.com/Hyzokaaa/open-helpdesk-backend.git
-git clone https://github.com/Hyzokaaa/open-helpdesk-client.git
-
-# Backend
-cd open-helpdesk-backend
-cp .env.example .env        # Configure your environment
-docker compose up -d         # Start PostgreSQL + MinIO
-npm install
-npm run migration:run        # Run database migrations
-npm run start:dev            # Start API server
-
-# Client (in another terminal)
-cd open-helpdesk-client
-cp .env.example .env         # Set VITE_API_URL
-npm install
-npm run dev                  # Start frontend
+git clone https://github.com/Hyzokaaa/open-helpdesk.git
+cd open-helpdesk
+cp .env.example .env
+docker compose up -d
 ```
 
-### Environment Variables
+That's it. Open [localhost](http://localhost) for the app, API runs on port 3000.
 
-**Backend (.env):**
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=open_helpdesk
-DB_USER=postgres
-DB_PASSWORD=postgres
+Default admin: `admin@admin.com` / `admin1234` — change these in `.env` before going to production.
 
-JWT_SECRET=your-secret-key
-JWT_EXPIRATION=1d
+### Configuration
 
-S3_ENDPOINT=http://localhost:9000
-S3_BUCKET=helpdesk-attachments
-S3_REGION=us-east-1
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
+All settings are in `.env`. The defaults work out of the box for local use. For production, you should change:
 
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=changeme
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Secret key for authentication tokens |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
+| `DB_PASSWORD` | Database password |
+| `SMTP_*` | Email server for notifications |
+| `FRONTEND_URL` | Public URL of your deployment |
+| `VITE_API_URL` | Backend URL the client connects to |
 
-EMAIL_PROVIDER=smtp
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=user
-SMTP_PASSWORD=password
-EMAIL_FROM=Helpdesk <support@example.com>
-```
-
-**Client (.env):**
-```env
-VITE_API_URL=http://localhost:3000
-```
+See [`.env.example`](.env.example) for all available options.
 
 ## Architecture
 
