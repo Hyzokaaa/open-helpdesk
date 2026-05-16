@@ -59,7 +59,6 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 |-----------|-------------|
 | [open-helpdesk-backend](https://github.com/Hyzokaaa/open-helpdesk-backend) | NestJS API — clean architecture, domain services, unit tests |
 | [open-helpdesk-client](https://github.com/Hyzokaaa/open-helpdesk-client) | React SPA — custom UI components, i18n, dark mode |
-| [open-helpdesk-landing](https://github.com/Hyzokaaa/open-helpdesk-landing) | Landing page — GitHub Pages |
 
 ## Get Started
 
