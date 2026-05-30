@@ -69,6 +69,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       EMAIL_FROM: ${EMAIL_FROM:-Open Helpdesk <noreply@example.com>}
+      EMAIL_DOMAIN: ${EMAIL_DOMAIN:-}
       S3_ENDPOINT: http://minio:9000
       S3_BUCKET: ${S3_BUCKET:-helpdesk-attachments}
       S3_REGION: ${S3_REGION:-us-east-1}
@@ -84,6 +85,10 @@ services:
       - "${CLIENT_PORT:-80}:80"
     depends_on:
       - backend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_APP_NAME: ${VITE_APP_NAME:-Open}
+      VITE_APP_SUBTITLE: ${VITE_APP_SUBTITLE:-Helpdesk}
 
 volumes:
   postgres_data:
