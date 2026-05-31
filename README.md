@@ -35,6 +35,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Workspaces** — Multi-tenant isolation with custom color palettes and branding
 - **Invitations** — Invite team members by email with batch support and auto-accept on signup
 - **Comments & Mentions** — Mention teammates with autocomplete. XSS-sanitized content
+- **Email-to-Ticket** — Customers send an email, a ticket is created. Replies become comments. Works with any IMAP mailbox
 - **Email Notifications** — Configurable per-event with SMTP support
 - **In-App Notifications** — Real-time polling, mark as read, per-event preferences
 - **File Attachments** — S3-compatible storage, drag & drop, clipboard paste, image lightbox
@@ -91,8 +92,54 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | `SMTP_*` | Email server for notifications |
 | `FRONTEND_URL` | Public URL of your deployment |
 | `VITE_API_URL` | Backend URL the client connects to |
+| `VITE_APP_NAME` | App name shown in the UI (default: `Open`) |
+| `VITE_APP_SUBTITLE` | Subtitle shown below the name (default: `Helpdesk`) |
+| `EMAIL_DOMAIN` | Your domain for email threading headers (optional) |
+| `SUPPORT_EMAIL_DOMAIN` | Domain for workspace support addresses (optional) |
+| `IMAP_HOST` / `IMAP_USER` / `IMAP_PASS` | IMAP mailbox for email-to-ticket (optional) |
 
 See [`.env.example`](.env.example) for all available options.
+
+### HTTPS / Reverse Proxy
+
+If you're running behind a reverse proxy (nginx, Caddy, etc.) with HTTPS, you need to proxy both the client and the backend API. Example nginx config:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name helpdesk.example.com;
+
+    ssl_certificate     /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    # Frontend
+    location / {
+        proxy_pass http://localhost:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://localhost:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then set your `.env` accordingly:
+
+```env
+FRONTEND_URL=https://helpdesk.example.com
+VITE_API_URL=https://helpdesk.example.com/api
+```
+
+> **Note:** The trailing slash in `proxy_pass http://localhost:3000/` is important — it strips the `/api/` prefix so the backend receives the correct paths.
 
 ## Architecture
 
