@@ -100,6 +100,44 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 
 See [`.env.example`](.env.example) for all available options.
 
+### Email-to-Ticket (optional)
+
+Let your customers create tickets by sending an email. You have two options:
+
+#### Option A: IMAP (recommended — works with any email provider)
+
+1. Create a dedicated email account (e.g. `support@yourcompany.com`) with any provider (Gmail, Outlook, your own mail server)
+2. Add the IMAP credentials to your `.env`:
+
+```env
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_USER=support@yourcompany.com
+IMAP_PASS=your-app-password
+EMAIL_DOMAIN=yourcompany.com
+```
+
+3. Restart the backend. It will poll the mailbox every 30 seconds for new emails.
+4. Go to **Workspace Settings → Email Mailboxes → Connect Mailbox** and add the same email address as a mailbox linked to your workspace.
+5. Send a test email to that address — a ticket should appear in your dashboard.
+
+> **Gmail users:** You need an [App Password](https://myaccount.google.com/apppasswords), not your regular password. Enable 2-Step Verification first.
+
+> **Multiple mailboxes:** You can also skip the env vars entirely and configure everything from the UI. Each workspace can have its own IMAP mailbox.
+
+#### Option B: MTA Hook (for Stalwart or compatible mail servers)
+
+If you run your own mail server with MTA Hook support (like [Stalwart](https://stalw.art)):
+
+```env
+SUPPORT_EMAIL_DOMAIN=support.yourcompany.com
+EMAIL_DOMAIN=yourcompany.com
+MTA_HOOK_USER=mta-hook
+MTA_HOOK_SECRET=your-secret
+```
+
+Configure your mail server to POST incoming emails to `https://your-api-url/inbound/email` with Basic Auth.
+
 ### HTTPS / Reverse Proxy
 
 If you're running behind a reverse proxy (nginx, Caddy, etc.) with HTTPS, you need to proxy both the client and the backend API. Example nginx config:
