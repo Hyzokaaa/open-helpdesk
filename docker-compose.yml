@@ -60,7 +60,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_RUN_MIGRATIONS: "true"
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-1d}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
