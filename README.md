@@ -175,6 +175,75 @@ VITE_API_URL=https://helpdesk.example.com/api
 
 > **Note:** The trailing slash in `proxy_pass http://localhost:3000/` is important — it strips the `/api/` prefix so the backend receives the correct paths.
 
+### Embed in Your Product (Token Exchange)
+
+You can integrate Open Helpdesk into your own application so your users access the helpdesk without a separate login. This works by exchanging a user's identity from your system for an Open Helpdesk JWT.
+
+#### 1. Create an API key
+
+Go to **Workspace Settings → API Keys** and create a key with the **Token exchange (SSO)** scope (`auth:exchange`).
+
+#### 2. Add one endpoint to your backend
+
+When your user needs to access the helpdesk, your backend calls Open Helpdesk to get a JWT:
+
+```javascript
+// Your backend (Express, NestJS, Django, Rails, etc.)
+app.get('/api/helpdesk-token', auth, async (req, res) => {
+  const response = await fetch('https://your-helpdesk-api/api/v1/auth/exchange', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ohd_your_api_key',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      role: 'agent', // agent, admin, supervisor, or reporter
+    }),
+  });
+  const { accessToken } = await response.json();
+  res.json({ token: accessToken });
+});
+```
+
+#### 3. Use the token in the frontend
+
+```javascript
+// Your frontend
+const { token } = await fetch('/api/helpdesk-token').then(r => r.json());
+localStorage.setItem('access_token', token);
+window.location.href = '/helpdesk'; // Your Open Helpdesk client deployment
+```
+
+**What happens:**
+- If the user doesn't exist in Open Helpdesk, they are automatically created and added to the workspace
+- If they already exist, a new JWT is issued
+- The user never sees an Open Helpdesk login screen
+
+**Request:**
+```
+POST /api/v1/auth/exchange
+Authorization: Bearer ohd_your_api_key
+Content-Type: application/json
+
+{
+  "email": "user@company.com",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "role": "agent"       // optional, defaults to "agent"
+}
+```
+
+**Response:**
+```json
+{
+  "accessToken": "eyJhbG...",
+  "user": { "id": "01J...", "email": "user@company.com" }
+}
+```
+
 ## Architecture
 
 The backend follows clean architecture with strict layer separation:
