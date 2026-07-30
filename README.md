@@ -22,20 +22,32 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 
 ## Features
 
-- **Ticket Management** — Full lifecycle: create, assign, track, resolve, discard. Priority, categories, custom fields
+- **Ticket Management** — Full lifecycle: create, assign, pick up, transfer, resolve, discard. Priority, categories, custom fields
+- **Kanban Board** — Drag-and-drop board view with custom ordering per column
+- **Transfer Requests** — Agents request ticket transfers, recipients accept or reject
+- **Knowledge Base** — Help articles organized by category, public portal with search, WYSIWYG editor
+- **AI Writing Assistant** — Improve and translate ticket descriptions with any OpenAI-compatible API
 - **Reports & CSAT** — Resolution metrics, agent performance, charts, and customer satisfaction surveys
+- **SLA Tracking** — Response and resolution time targets per priority with automatic breach detection
 - **Canned Responses** — Predefined replies with "/" quick inserter for faster agent responses
 - **Custom Fields** — 6 field types (text, number, select, multi-select, date, checkbox) per workspace
 - **Audit Log** — Track every action across your workspace with detailed metadata
-- **Roles & Permissions** — 20+ granular permissions across 3 roles (Admin, Agent, Reporter)
+- **Public API & Webhooks** — REST API with scoped API keys and webhook event delivery
+- **Customer Portal** — Public ticket form, magic link tracking, embeddable widget
+- **Roles & Permissions** — 30+ granular permissions across 4 roles (Admin, Supervisor, Agent, Reporter)
+- **Ticket Followers** — Follow tickets for updates, @mentions auto-add followers with read-only access
 - **Workspaces** — Multi-tenant isolation with custom color palettes and branding
+- **Custom Email Sender** — Send notifications from your own email address via SMTP
 - **Invitations** — Invite team members by email with batch support and auto-accept on signup
-- **Comments & Mentions** — Mention teammates with autocomplete. XSS-sanitized content
+- **Comments & Mentions** — Mention teammates with autocomplete, timestamps on every comment
 - **Email-to-Ticket** — Customers send an email, a ticket is created. Replies become comments. Works with any IMAP mailbox
-- **Email Notifications** — Configurable per-event with SMTP support
-- **In-App Notifications** — Real-time polling, mark as read, per-event preferences
+- **Email Notifications** — Smart notifications only to ticket stakeholders, configurable per-event
+- **In-App Notifications** — Real-time polling, click to open ticket, mark as read, per-event preferences
+- **Data Migration** — Export and import workspace data between instances with duplicate detection
 - **File Attachments** — S3-compatible storage, drag & drop, clipboard paste, image lightbox
 - **Tags** — Color-coded tags per workspace for flexible organization
+- **SSO / Token Exchange** — Embed Open Helpdesk in your product with single API call authentication
+- **Google & Microsoft Sign-In** — One-click OAuth login with multi-frontend redirect support
 - **Dark Mode** — 5 theme options: System, Light, Light Border, Dark, Dark Deep
 - **i18n** — Full English and Spanish translations, including email templates
 
@@ -46,7 +58,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 | Backend | NestJS, TypeORM, PostgreSQL |
 | Frontend | React 19, Vite, Tailwind CSS 4 |
 | Storage | S3-compatible (AWS, MinIO, Hetzner) |
-| Email | SMTP / Postmark |
+| Email | Resend / SMTP / Postmark |
 | Auth | JWT with refresh tokens |
 | Deploy | Docker, Coolify |
 
@@ -85,7 +97,9 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | `JWT_SECRET` | Secret key for authentication tokens |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
 | `DB_PASSWORD` | Database password |
-| `SMTP_*` | Email server for notifications |
+| `EMAIL_PROVIDER` | Email provider: `resend`, `smtp`, or `postmark` |
+| `EMAIL_API_KEY` | API key for Resend (if using Resend provider) |
+| `SMTP_*` | SMTP server for notifications (if using SMTP provider) |
 | `FRONTEND_URL` | Public URL of your deployment |
 | `VITE_API_URL` | Backend URL the client connects to |
 | `VITE_APP_NAME` | App name shown in the UI (default: `Open`) |
