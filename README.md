@@ -37,10 +37,11 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Roles & Permissions** — 30+ granular permissions across 4 roles (Admin, Supervisor, Agent, Reporter)
 - **Ticket Followers** — Follow tickets for updates, @mentions auto-add followers with read-only access
 - **Workspaces** — Multi-tenant isolation with custom color palettes and branding
+- **System Email Settings** — Configure SMTP from the Admin UI, no environment variables needed
 - **Custom Email Sender** — Send notifications from your own email address via SMTP
-- **Invitations** — Invite team members by email with batch support and auto-accept on signup
+- **Invitations** — Invite team members by email, copy invite link, invitation-only signup for selfhosted
 - **Comments & Mentions** — Mention teammates with autocomplete, timestamps on every comment
-- **Email-to-Ticket** — Customers send an email, a ticket is created. Replies become comments. Works with any IMAP mailbox
+- **Email-to-Ticket** — Customers send an email, a ticket is created. Replies become comments. Works with any IMAP mailbox. Import backlog, poll now, pause/resume controls
 - **Email Notifications** — Smart notifications only to ticket stakeholders, configurable per-event
 - **In-App Notifications** — Real-time polling, click to open ticket, mark as read, per-event preferences
 - **Data Migration** — Export and import workspace data between instances with duplicate detection
