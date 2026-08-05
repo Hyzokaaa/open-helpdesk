@@ -32,6 +32,8 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Canned Responses** — Predefined replies with "/" quick inserter for faster agent responses
 - **Custom Fields** — 6 field types (text, number, select, multi-select, date, checkbox) per workspace
 - **Audit Log** — Track every action across your workspace with detailed metadata
+- **System Logs** — Admin-level logs for platform-wide visibility into system events
+- **Date & Timezone Preferences** — Per-user date format and timezone settings
 - **Public API & Webhooks** — REST API with scoped API keys and webhook event delivery
 - **Customer Portal** — Public ticket form, magic link tracking, embeddable widget
 - **Roles & Permissions** — 30+ granular permissions across 4 roles (Admin, Supervisor, Agent, Reporter)
@@ -41,7 +43,9 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Custom Email Sender** — Send notifications from your own email address via SMTP
 - **Invitations** — Invite team members by email, copy invite link, invitation-only signup for selfhosted
 - **Comments & Mentions** — Mention teammates with autocomplete, timestamps on every comment
-- **Email-to-Ticket** — Customers send an email, a ticket is created. Replies become comments. Works with any IMAP mailbox. Import backlog, poll now, pause/resume controls
+- **Email-to-Ticket (IMAP)** — Customers send an email, a ticket is created. Replies become comments. Universal IMAP polling works with any mail server. Import backlog, poll now, pause/resume controls. Configured entirely from the UI
+- **Platform Mailbox** — System-level IMAP catch-all for multi-workspace email routing, no per-workspace config needed
+- **Mailbox Address Filtering** — Filter inbound emails by exact address, aliases, or catch-all mode
 - **Email Notifications** — Smart notifications only to ticket stakeholders, configurable per-event
 - **In-App Notifications** — Real-time polling, click to open ticket, mark as read, per-event preferences
 - **Data Migration** — Export and import workspace data between instances with duplicate detection
@@ -56,7 +60,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | NestJS, TypeORM, PostgreSQL |
+| Backend | NestJS, TypeORM, PostgreSQL 18 |
 | Frontend | React 19, Vite, Tailwind CSS 4 |
 | Storage | S3-compatible (AWS, MinIO, Hetzner) |
 | Email | Resend / SMTP / Postmark |
@@ -105,49 +109,84 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | `VITE_API_URL` | Backend URL the client connects to |
 | `VITE_APP_NAME` | App name shown in the UI (default: `Open`) |
 | `VITE_APP_SUBTITLE` | Subtitle shown below the name (default: `Helpdesk`) |
-| `EMAIL_DOMAIN` | Your domain for email threading headers (optional) |
-| `SUPPORT_EMAIL_DOMAIN` | Domain for workspace support addresses (optional) |
-| `IMAP_HOST` / `IMAP_USER` / `IMAP_PASS` | IMAP mailbox for email-to-ticket (optional) |
+| `SUPPORT_EMAIL_DOMAIN` | Domain for auto-generated workspace email addresses (only for Platform Mailbox, see below) |
 
 See [`.env.example`](.env.example) for all available options.
 
 ### Email-to-Ticket (optional)
 
-Let your customers create tickets by sending an email. You have two options:
-
-#### Option A: IMAP (recommended — works with any email provider)
+Let your customers create tickets by sending an email. Works with any mail server via IMAP polling — no webhooks or special server configuration needed.
 
 1. Create a dedicated email account (e.g. `support@yourcompany.com`) with any provider (Gmail, Outlook, your own mail server)
-2. Add the IMAP credentials to your `.env`:
+2. Go to **Workspace Settings → Mailboxes → Connect Mailbox** and enter the IMAP credentials
+3. Send a test email to that address — a ticket should appear in your dashboard
 
-```env
-IMAP_HOST=imap.gmail.com
-IMAP_PORT=993
-IMAP_USER=support@yourcompany.com
-IMAP_PASS=your-app-password
-EMAIL_DOMAIN=yourcompany.com
-```
+Everything is configured from the UI. No environment variables needed.
 
-3. Restart the backend. It will poll the mailbox every 30 seconds for new emails.
-4. Go to **Workspace Settings → Email Mailboxes → Connect Mailbox** and add the same email address as a mailbox linked to your workspace.
-5. Send a test email to that address — a ticket should appear in your dashboard.
+**Features per mailbox:**
+- **Address filtering** — Process only emails sent to the mailbox address, include aliases, or accept all (catch-all)
+- **Encryption** — TLS (validate certificate), TLS (allow self-signed), or None
+- **Auto-reply** — Toggle automatic confirmation emails when tickets are created from inbound email
+- **Pause / Resume** — Temporarily stop polling without deleting the mailbox
+- **Import** — Import all existing emails from the mailbox as tickets
 
 > **Gmail users:** You need an [App Password](https://myaccount.google.com/apppasswords), not your regular password. Enable 2-Step Verification first.
 
-> **Multiple mailboxes:** You can also skip the env vars entirely and configure everything from the UI. Each workspace can have its own IMAP mailbox.
+> **How replies work:** When a ticket is created from email, the system adds threading headers so the customer can reply directly to the notification email and their reply becomes a comment on the ticket.
 
-#### Option B: MTA Hook (for Stalwart or compatible mail servers)
+---
 
-If you run your own mail server with MTA Hook support (like [Stalwart](https://stalw.art)):
+### Platform Mailbox (advanced, optional)
 
-```env
-SUPPORT_EMAIL_DOMAIN=support.yourcompany.com
-EMAIL_DOMAIN=yourcompany.com
-MTA_HOOK_USER=mta-hook
-MTA_HOOK_SECRET=your-secret
+> **Most users don't need this.** This is for operators who run their own mail server and want to route emails from multiple workspaces through a single IMAP account. If you just need email-to-ticket for one workspace, use the standard mailbox setup above.
+
+The Platform Mailbox is a system-level IMAP catch-all that automatically routes emails to the correct workspace based on the recipient address. Instead of configuring IMAP per workspace, you configure one mailbox in **Admin → Settings → Email Receiving** and every workspace gets an email address automatically.
+
+**How it works:**
+
+1. You operate a mail server (Stalwart, Postfix, Dovecot, etc.) with a **catch-all** configured — all emails to `*@support.yourdomain.com` land in one IMAP mailbox
+2. You configure the Platform Mailbox in **Admin → Settings** pointing to that IMAP account
+3. When a workspace is created, it gets an address like `{workspace-slug}@support.yourdomain.com`
+4. The poller reads all emails from the catch-all, checks the `To`/`CC` headers, and routes each email to the correct workspace
+
+**Requirements:**
+
+- A mail server you control with catch-all enabled for the support domain
+- `SUPPORT_EMAIL_DOMAIN` environment variable set to the support domain (e.g. `support.yourdomain.com`), OR the domain is derived automatically from the Platform Mailbox address
+- DNS: MX record for the support domain pointing to your mail server
+
+**Mail server catch-all setup (examples):**
+
+<details>
+<summary>Stalwart</summary>
+
+In Stalwart Admin UI → Settings → Listeners → RCPT stage, enable catch-all for the domain. All emails to `*@support.yourdomain.com` will be delivered to the configured account.
+
+</details>
+
+<details>
+<summary>Postfix</summary>
+
+Add to `/etc/postfix/virtual`:
 ```
+@support.yourdomain.com   catchall-user@yourdomain.com
+```
+Then run `postmap /etc/postfix/virtual` and `systemctl reload postfix`.
 
-Configure your mail server to POST incoming emails to `https://your-api-url/inbound/email` with Basic Auth.
+</details>
+
+<details>
+<summary>Dovecot + any MTA</summary>
+
+Configure your MTA to accept all addresses for the domain and deliver to a single Dovecot mailbox. The specific steps depend on your MTA (Postfix, Exim, etc.).
+
+</details>
+
+**Workspace admin controls:**
+
+- Each workspace admin can **disable** the platform mailbox for their workspace (the toggle in Workspace Settings → Mailboxes)
+- Disabling only stops tickets from being created via the platform catch-all — their own IMAP mailboxes continue working independently
+- If the system admin pauses the Platform Mailbox, all workspaces see it as "paused" and the toggle is disabled
 
 ### HTTPS / Reverse Proxy
 
