@@ -49,7 +49,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Email Notifications** — Smart notifications only to ticket stakeholders, configurable per-event
 - **In-App Notifications** — Real-time polling, click to open ticket, mark as read, per-event preferences
 - **Data Migration** — Export and import workspace data between instances with duplicate detection
-- **File Attachments** — S3-compatible storage, drag & drop, clipboard paste, image lightbox
+- **File Attachments** — Filesystem or S3-compatible storage, drag & drop, clipboard paste, image lightbox
 - **Tags** — Color-coded tags per workspace for flexible organization
 - **SSO / Token Exchange** — Embed Open Helpdesk in your product with single API call authentication
 - **Google & Microsoft Sign-In** — One-click OAuth login with multi-frontend redirect support
@@ -62,7 +62,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 |-------|-----------|
 | Backend | NestJS, TypeORM, PostgreSQL 18 |
 | Frontend | React 19, Vite, Tailwind CSS 4 |
-| Storage | S3-compatible (AWS, MinIO, Hetzner) |
+| Storage | Filesystem (default) or S3-compatible (AWS, MinIO, Hetzner) |
 | Email | Resend / SMTP / Postmark |
 | Auth | JWT with refresh tokens |
 | Deploy | Docker, Coolify |
@@ -92,6 +92,162 @@ docker compose up -d
 That's it. Open [localhost](http://localhost) for the app, API runs on port 3000.
 
 Default admin: `admin@admin.com` / `admin1234` — change these in `.env` before going to production.
+
+### Option 3: Manual Deployment (without Docker)
+
+Run without Docker on bare metal. No MinIO needed, attachments are stored on disk.
+
+**Requirements:** Node.js 22+, PostgreSQL 15+, nginx.
+
+#### Quick install (interactive script)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh | bash
+```
+
+The script installs everything: backend, client, nginx config, and systemd service. It prompts for database credentials, hostname, and admin account.
+
+You can also install backend and client separately with their own scripts:
+- Backend: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-backend/main/install.sh | bash`
+- Client: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-client/main/install.sh | bash`
+
+#### Manual step-by-step
+
+<details>
+<summary>Click to expand manual instructions</summary>
+
+##### 1. Backend
+
+```bash
+git clone https://github.com/Hyzokaaa/open-helpdesk-backend.git /opt/open-helpdesk/backend
+cd /opt/open-helpdesk/backend
+npm install
+npm run build
+mkdir -p data/storage
+```
+
+Create a `.env` file (see [`.env.example`](https://github.com/Hyzokaaa/open-helpdesk-backend/blob/main/.env.example)):
+
+```env
+PORT=3000
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=open_helpdesk
+DB_USER=postgres
+DB_PASSWORD=your_db_password
+DB_RUN_MIGRATIONS=true
+JWT_SECRET=generate-a-long-random-string-here
+FRONTEND_URL=https://helpdesk.yourcompany.com
+ADMIN_EMAIL=admin@yourcompany.com
+ADMIN_PASSWORD=change-this
+STORAGE_PROVIDER=filesystem
+STORAGE_PATH=/opt/open-helpdesk/backend/data/storage
+```
+
+Start the backend:
+
+```bash
+node dist/main
+```
+
+The first start creates the database and the admin user automatically.
+
+**Run as a service (recommended):**
+
+```ini
+# /etc/systemd/system/openhelpdesk-backend.service
+[Unit]
+Description=Open Helpdesk Backend
+After=postgresql.service network.target
+
+[Service]
+Type=simple
+User=openhelpdesk
+WorkingDirectory=/opt/open-helpdesk/backend
+EnvironmentFile=/opt/open-helpdesk/backend/.env
+ExecStart=/usr/bin/node dist/main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo useradd --system --no-create-home --shell /bin/false openhelpdesk
+sudo chown -R openhelpdesk:openhelpdesk /opt/open-helpdesk/backend
+sudo systemctl enable --now openhelpdesk-backend
+```
+
+##### 2. Frontend
+
+```bash
+git clone https://github.com/Hyzokaaa/open-helpdesk-client.git /opt/open-helpdesk/client
+cd /opt/open-helpdesk/client
+```
+
+Create a `.env` file:
+
+```env
+VITE_API_URL=https://helpdesk.yourcompany.com/api
+VITE_APP_NAME=Your Company Helpdesk
+```
+
+Build and deploy:
+
+```bash
+npm install
+npm run build
+sudo mkdir -p /var/www/openhelpdesk
+sudo cp -r dist/* /var/www/openhelpdesk/
+```
+
+##### 3. Nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name helpdesk.yourcompany.com;
+
+    ssl_certificate     /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    root /var/www/openhelpdesk;
+    index index.html;
+
+    # Frontend (SPA)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location /assets {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://localhost:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+##### 4. Verify
+
+Open `https://helpdesk.yourcompany.com` and log in with the admin credentials from your `.env`.
+
+</details>
+
+**Notes:**
+- `STORAGE_PROVIDER=filesystem` stores attachments on disk, no S3/MinIO needed
+- Email (SMTP) can be configured later from Admin > Settings in the UI
+- For SSL, use Let's Encrypt with certbot: `sudo certbot --nginx -d helpdesk.yourcompany.com`
+- To update: `git pull`, `npm install`, `npm run build`, restart the service
 
 ### Configuration
 
