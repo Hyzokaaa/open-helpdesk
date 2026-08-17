@@ -95,25 +95,35 @@ Default admin: `admin@admin.com` / `admin1234` — change these in `.env` before
 
 ### Option 3: Manual Deployment (without Docker)
 
-If you prefer to run without Docker (e.g. bare metal, existing PostgreSQL, no MinIO), follow these steps.
+Run without Docker on bare metal. No MinIO needed, attachments are stored on disk.
 
-**Requirements:** Node.js 22+, PostgreSQL 15+, nginx (or any reverse proxy).
+**Requirements:** Node.js 22+, PostgreSQL 15+, nginx.
 
-#### 1. PostgreSQL
-
-Install PostgreSQL and create a database:
+#### Quick install (interactive script)
 
 ```bash
-sudo -u postgres createdb open_helpdesk
+curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh | bash
 ```
 
-#### 2. Backend
+The script installs everything: backend, client, nginx config, and systemd service. It prompts for database credentials, hostname, and admin account.
+
+You can also install backend and client separately with their own scripts:
+- Backend: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-backend/main/install.sh | bash`
+- Client: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-client/main/install.sh | bash`
+
+#### Manual step-by-step
+
+<details>
+<summary>Click to expand manual instructions</summary>
+
+##### 1. Backend
 
 ```bash
-git clone https://github.com/Hyzokaaa/open-helpdesk-backend.git
-cd open-helpdesk-backend
+git clone https://github.com/Hyzokaaa/open-helpdesk-backend.git /opt/open-helpdesk/backend
+cd /opt/open-helpdesk/backend
 npm install
 npm run build
+mkdir -p data/storage
 ```
 
 Create a `.env` file (see [`.env.example`](https://github.com/Hyzokaaa/open-helpdesk-backend/blob/main/.env.example)):
@@ -131,7 +141,7 @@ FRONTEND_URL=https://helpdesk.yourcompany.com
 ADMIN_EMAIL=admin@yourcompany.com
 ADMIN_PASSWORD=change-this
 STORAGE_PROVIDER=filesystem
-STORAGE_PATH=./data/storage
+STORAGE_PATH=/opt/open-helpdesk/backend/data/storage
 ```
 
 Start the backend:
@@ -140,15 +150,15 @@ Start the backend:
 node dist/main
 ```
 
-The first start creates the database tables and the admin user automatically.
+The first start creates the database and the admin user automatically.
 
-**Run as a service (systemd):**
+**Run as a service (recommended):**
 
 ```ini
 # /etc/systemd/system/openhelpdesk-backend.service
 [Unit]
 Description=Open Helpdesk Backend
-After=postgresql.service
+After=postgresql.service network.target
 
 [Service]
 Type=simple
@@ -157,43 +167,42 @@ WorkingDirectory=/opt/open-helpdesk/backend
 EnvironmentFile=/opt/open-helpdesk/backend/.env
 ExecStart=/usr/bin/node dist/main
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 ```bash
+sudo useradd --system --no-create-home --shell /bin/false openhelpdesk
+sudo chown -R openhelpdesk:openhelpdesk /opt/open-helpdesk/backend
 sudo systemctl enable --now openhelpdesk-backend
 ```
 
-#### 3. Frontend
+##### 2. Frontend
 
 ```bash
-git clone https://github.com/Hyzokaaa/open-helpdesk-client.git
-cd open-helpdesk-client
+git clone https://github.com/Hyzokaaa/open-helpdesk-client.git /opt/open-helpdesk/client
+cd /opt/open-helpdesk/client
 ```
 
-Create a `.env` file with your configuration:
+Create a `.env` file:
 
 ```env
 VITE_API_URL=https://helpdesk.yourcompany.com/api
 VITE_APP_NAME=Your Company Helpdesk
 ```
 
-Build:
+Build and deploy:
 
 ```bash
 npm install
 npm run build
-```
-
-Copy the built files to nginx:
-
-```bash
+sudo mkdir -p /var/www/openhelpdesk
 sudo cp -r dist/* /var/www/openhelpdesk/
 ```
 
-#### 4. Nginx
+##### 3. Nginx
 
 ```nginx
 server {
@@ -228,14 +237,16 @@ server {
 }
 ```
 
-#### 5. Verify
+##### 4. Verify
 
 Open `https://helpdesk.yourcompany.com` and log in with the admin credentials from your `.env`.
+
+</details>
 
 **Notes:**
 - `STORAGE_PROVIDER=filesystem` stores attachments on disk, no S3/MinIO needed
 - Email (SMTP) can be configured later from Admin > Settings in the UI
-- For SSL, use Let's Encrypt with certbot or your own certificates
+- For SSL, use Let's Encrypt with certbot: `sudo certbot --nginx -d helpdesk.yourcompany.com`
 - To update: `git pull`, `npm install`, `npm run build`, restart the service
 
 ### Configuration
