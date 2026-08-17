@@ -8,18 +8,27 @@ set -e
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh | bash
 #
-# Or clone the repo and run:
-#   chmod +x install.sh && ./install.sh
+# Custom install (e.g. second instance on same server):
+#   INSTALL_DIR=/opt/oh-test BACKEND_PORT=3001 NGINX_PORT=8080 \
+#     SERVICE_NAME=oh-test DB_NAME=oh_test bash install.sh
 
-INSTALL_DIR="/opt/open-helpdesk"
-WEB_ROOT="/var/www/openhelpdesk"
-SERVICE_USER="openhelpdesk"
-SERVICE_NAME="openhelpdesk-backend"
+INSTALL_DIR="${INSTALL_DIR:-/opt/open-helpdesk}"
+WEB_ROOT="${WEB_ROOT:-/var/www/openhelpdesk}"
+SERVICE_USER="${SERVICE_USER:-openhelpdesk}"
+SERVICE_NAME="${SERVICE_NAME:-openhelpdesk-backend}"
+BACKEND_PORT="${BACKEND_PORT:-3000}"
+NGINX_PORT="${NGINX_PORT:-80}"
+NGINX_SITE="${NGINX_SITE:-openhelpdesk}"
 
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║     Open Helpdesk Installer          ║"
 echo "  ╚══════════════════════════════════════╝"
+echo ""
+echo "  Install dir:    $INSTALL_DIR"
+echo "  Backend port:   $BACKEND_PORT"
+echo "  Nginx port:     $NGINX_PORT"
+echo "  Service name:   $SERVICE_NAME"
 echo ""
 
 # ── Check Node.js ──
@@ -80,8 +89,8 @@ DB_HOST=${DB_HOST:-localhost}
 read -p "Database port [5432]: " DB_PORT
 DB_PORT=${DB_PORT:-5432}
 
-read -p "Database name [open_helpdesk]: " DB_NAME
-DB_NAME=${DB_NAME:-open_helpdesk}
+read -p "Database name [${DB_NAME:-open_helpdesk}]: " DB_NAME_INPUT
+DB_NAME=${DB_NAME_INPUT:-${DB_NAME:-open_helpdesk}}
 
 read -p "Database user [postgres]: " DB_USER
 DB_USER=${DB_USER:-postgres}
@@ -103,8 +112,13 @@ JWT_SECRET=$(openssl rand -hex 32)
 
 # Determine URLs based on hostname
 if [ "$SERVER_NAME" = "localhost" ]; then
-  FRONTEND_URL="http://localhost"
-  VITE_API_URL="http://localhost/api"
+  if [ "$NGINX_PORT" = "80" ]; then
+    FRONTEND_URL="http://localhost"
+    VITE_API_URL="http://localhost/api"
+  else
+    FRONTEND_URL="http://localhost:$NGINX_PORT"
+    VITE_API_URL="http://localhost:$NGINX_PORT/api"
+  fi
 else
   FRONTEND_URL="https://$SERVER_NAME"
   VITE_API_URL="https://$SERVER_NAME/api"
@@ -145,7 +159,7 @@ sudo mkdir -p "$INSTALL_DIR/backend/data/storage"
 
 if [ ! -f "$INSTALL_DIR/backend/.env" ]; then
   sudo tee "$INSTALL_DIR/backend/.env" > /dev/null << EOF
-PORT=3000
+PORT=$BACKEND_PORT
 DB_HOST=$DB_HOST
 DB_PORT=$DB_PORT
 DB_NAME=$DB_NAME
@@ -171,7 +185,7 @@ sudo chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/backend" 2>/dev/null |
 
 sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
-Description=Open Helpdesk Backend
+Description=Open Helpdesk Backend ($SERVICE_NAME)
 After=postgresql.service network.target
 
 [Service]
@@ -196,7 +210,7 @@ echo "[OK] Backend service started"
 # Wait for backend to be ready
 echo "Waiting for backend..."
 for i in $(seq 1 30); do
-  if curl -s -o /dev/null http://localhost:3000/health 2>/dev/null; then
+  if curl -s -o /dev/null http://localhost:$BACKEND_PORT/health 2>/dev/null; then
     echo "[OK] Backend is ready"
     break
   fi
@@ -244,9 +258,9 @@ echo ""
 echo "── Configuring nginx ──"
 echo ""
 
-sudo tee /etc/nginx/sites-available/openhelpdesk > /dev/null << EOF
+sudo tee /etc/nginx/sites-available/$NGINX_SITE > /dev/null << EOF
 server {
-    listen 80;
+    listen $NGINX_PORT;
     server_name $SERVER_NAME;
 
     root $WEB_ROOT;
@@ -265,7 +279,7 @@ server {
 
     # Backend API
     location /api/ {
-        proxy_pass http://localhost:3000/;
+        proxy_pass http://localhost:$BACKEND_PORT/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -274,8 +288,7 @@ server {
 }
 EOF
 
-sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
-sudo ln -sf /etc/nginx/sites-available/openhelpdesk /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/$NGINX_SITE /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 echo "[OK] nginx configured"
@@ -287,19 +300,19 @@ echo "  ╔═══════════════════════
 echo "  ║           Installation Complete!                     ║"
 echo "  ╠══════════════════════════════════════════════════════╣"
 echo "  ║                                                      ║"
-echo "  ║  URL:    http://$SERVER_NAME"
-echo "  ║  Admin:  $ADMIN_EMAIL"
+echo "  ║  URL:      $FRONTEND_URL"
+echo "  ║  Admin:    $ADMIN_EMAIL"
 echo "  ║                                                      ║"
-echo "  ║  Backend config:  $INSTALL_DIR/backend/.env"
-echo "  ║  Client config:   $INSTALL_DIR/client/.env"
-echo "  ║  Storage:         $INSTALL_DIR/backend/data/storage"
-echo "  ║  Web root:        $WEB_ROOT"
+echo "  ║  Backend:  $INSTALL_DIR/backend/.env"
+echo "  ║  Client:   $INSTALL_DIR/client/.env"
+echo "  ║  Storage:  $INSTALL_DIR/backend/data/storage"
+echo "  ║  Web root: $WEB_ROOT"
 echo "  ║                                                      ║"
 echo "  ║  Commands:                                           ║"
 echo "  ║    sudo systemctl status $SERVICE_NAME"
 echo "  ║    sudo journalctl -u $SERVICE_NAME -f"
 echo "  ║                                                      ║"
-echo "  ║  For HTTPS, configure SSL with certbot:              ║"
+echo "  ║  For HTTPS:                                          ║"
 echo "  ║    sudo certbot --nginx -d $SERVER_NAME"
 echo "  ║                                                      ║"
 echo "  ╚══════════════════════════════════════════════════════╝"
