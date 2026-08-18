@@ -6,11 +6,23 @@ set -e
 # Requirements: Node.js 22+, PostgreSQL 15+, nginx.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh -o install.sh
+#   bash install.sh
 #
 # Custom install (e.g. second instance on same server):
 #   INSTALL_DIR=/opt/oh-test BACKEND_PORT=3001 NGINX_PORT=8080 \
 #     SERVICE_NAME=oh-test DB_NAME=oh_test bash install.sh
+
+# Detect if running via pipe (curl | bash) — read won't work
+if [ ! -t 0 ]; then
+  echo "[ERROR] This script requires interactive input."
+  echo ""
+  echo "  Download first, then run:"
+  echo "    curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh -o install.sh"
+  echo "    bash install.sh"
+  echo ""
+  exit 1
+fi
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/open-helpdesk}"
 WEB_ROOT="${WEB_ROOT:-/var/www/openhelpdesk}"
