@@ -102,7 +102,8 @@ Run without Docker on bare metal. No MinIO needed, attachments are stored on dis
 #### Quick install (interactive script)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk/main/install.sh -o install.sh
+bash install.sh
 ```
 
 The script installs everything: backend, client, nginx config, and systemd service. It prompts for database credentials, hostname, and admin account.
