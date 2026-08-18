@@ -64,7 +64,7 @@ echo "[OK] PostgreSQL found"
 
 # ── Check nginx ──
 
-if ! command -v nginx &> /dev/null; then
+if ! command -v nginx &> /dev/null && ! [ -x /usr/sbin/nginx ]; then
   echo "[ERROR] nginx is not installed."
   echo ""
   echo "  Install nginx:"
@@ -72,6 +72,7 @@ if ! command -v nginx &> /dev/null; then
   echo ""
   exit 1
 fi
+export PATH="$PATH:/usr/sbin"
 echo "[OK] nginx found"
 
 # ── Configuration ──
