@@ -140,11 +140,13 @@ sudo mkdir -p "$INSTALL_DIR"
 
 if [ -d "$INSTALL_DIR/backend/.git" ]; then
   echo "Updating backend..."
+  git config --global --add safe.directory "$INSTALL_DIR/backend" 2>/dev/null || true
   cd "$INSTALL_DIR/backend"
   sudo git pull
 else
   echo "Cloning backend..."
   sudo git clone https://github.com/Hyzokaaa/open-helpdesk-backend.git "$INSTALL_DIR/backend"
+  git config --global --add safe.directory "$INSTALL_DIR/backend" 2>/dev/null || true
 fi
 
 cd "$INSTALL_DIR/backend"
@@ -225,11 +227,13 @@ echo ""
 
 if [ -d "$INSTALL_DIR/client/.git" ]; then
   echo "Updating client..."
+  git config --global --add safe.directory "$INSTALL_DIR/client" 2>/dev/null || true
   cd "$INSTALL_DIR/client"
   sudo git pull
 else
   echo "Cloning client..."
   sudo git clone https://github.com/Hyzokaaa/open-helpdesk-client.git "$INSTALL_DIR/client"
+  git config --global --add safe.directory "$INSTALL_DIR/client" 2>/dev/null || true
 fi
 
 cd "$INSTALL_DIR/client"
@@ -303,7 +307,7 @@ EOF
 if [ -n "$NGINX_LINK_PATH" ]; then
   sudo ln -sf "$NGINX_CONF_PATH" "$NGINX_LINK_PATH"
 fi
-sudo nginx -t && sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl restart nginx
 
 echo "[OK] nginx configured"
 
