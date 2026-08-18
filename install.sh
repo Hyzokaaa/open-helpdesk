@@ -258,7 +258,19 @@ echo ""
 echo "── Configuring nginx ──"
 echo ""
 
-sudo tee /etc/nginx/sites-available/$NGINX_SITE > /dev/null << EOF
+# Detect nginx config structure
+if [ -d /etc/nginx/sites-available ]; then
+  NGINX_CONF_PATH="/etc/nginx/sites-available/$NGINX_SITE.conf"
+  NGINX_LINK_PATH="/etc/nginx/sites-enabled/$NGINX_SITE.conf"
+elif [ -d /etc/nginx/conf.d ]; then
+  NGINX_CONF_PATH="/etc/nginx/conf.d/$NGINX_SITE.conf"
+  NGINX_LINK_PATH=""
+else
+  echo "[ERROR] Could not detect nginx config directory"
+  exit 1
+fi
+
+sudo tee "$NGINX_CONF_PATH" > /dev/null << EOF
 server {
     listen $NGINX_PORT;
     server_name $SERVER_NAME;
@@ -288,7 +300,9 @@ server {
 }
 EOF
 
-sudo ln -sf /etc/nginx/sites-available/$NGINX_SITE /etc/nginx/sites-enabled/
+if [ -n "$NGINX_LINK_PATH" ]; then
+  sudo ln -sf "$NGINX_CONF_PATH" "$NGINX_LINK_PATH"
+fi
 sudo nginx -t && sudo systemctl reload nginx
 
 echo "[OK] nginx configured"
