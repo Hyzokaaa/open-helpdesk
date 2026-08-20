@@ -43,82 +43,105 @@ echo "  Nginx port:     $NGINX_PORT"
 echo "  Service name:   $SERVICE_NAME"
 echo ""
 
-# ── Check Node.js ──
+# ══════════════════════════════════════════════
+# Step 1/6 — Prerequisites
+# ══════════════════════════════════════════════
 
+echo "── Step 1/6: Checking prerequisites ──"
+echo ""
+
+# Node.js
 if ! command -v node &> /dev/null; then
-  echo "[ERROR] Node.js is not installed."
-  echo ""
-  echo "  Install Node.js 22+:"
-  echo "    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
-  echo "    sudo apt-get install -y nodejs"
-  echo ""
-  exit 1
-fi
-
-NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 22 ]; then
-  echo "[ERROR] Node.js 22+ required. Found: $(node -v)"
-  exit 1
+  read -p "[MISSING] Node.js is not installed. Install it now? (Y/n): " INSTALL_NODE
+  if [ "${INSTALL_NODE,,}" != "n" ]; then
+    echo "Installing Node.js 22..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+  else
+    echo "[ERROR] Node.js is required. Aborting."
+    exit 1
+  fi
+else
+  NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+  if [ "$NODE_VERSION" -lt 22 ]; then
+    echo "[ERROR] Node.js 22+ required. Found: $(node -v)"
+    exit 1
+  fi
 fi
 echo "[OK] Node.js $(node -v)"
 
-# ── Check PostgreSQL ──
-
+# PostgreSQL
 if ! command -v psql &> /dev/null; then
-  echo "[ERROR] PostgreSQL is not installed."
-  echo ""
-  echo "  Install PostgreSQL:"
-  echo "    sudo apt-get install -y postgresql"
-  echo ""
-  exit 1
+  read -p "[MISSING] PostgreSQL is not installed. Install it now? (Y/n): " INSTALL_PG
+  if [ "${INSTALL_PG,,}" != "n" ]; then
+    echo "Installing PostgreSQL..."
+    sudo apt-get install -y postgresql
+  else
+    echo "[ERROR] PostgreSQL is required. Aborting."
+    exit 1
+  fi
 fi
 echo "[OK] PostgreSQL found"
 
-# ── Check nginx ──
-
+# nginx
 if ! command -v nginx &> /dev/null && ! [ -x /usr/sbin/nginx ]; then
-  echo "[ERROR] nginx is not installed."
-  echo ""
-  echo "  Install nginx:"
-  echo "    sudo apt-get install -y nginx"
-  echo ""
-  exit 1
+  read -p "[MISSING] nginx is not installed. Install it now? (Y/n): " INSTALL_NGINX
+  if [ "${INSTALL_NGINX,,}" != "n" ]; then
+    echo "Installing nginx..."
+    sudo apt-get install -y nginx
+  else
+    echo "[ERROR] nginx is required. Aborting."
+    exit 1
+  fi
 fi
 export PATH="$PATH:/usr/sbin"
 echo "[OK] nginx found"
 
-# ── Configuration ──
-
 echo ""
-echo "── Configuration ──"
+
+# ══════════════════════════════════════════════
+# Step 2/6 — Configuration
+# ══════════════════════════════════════════════
+
+echo "── Step 2/6: Configuration ──"
 echo ""
 
 read -p "Server hostname (e.g. helpdesk.yourcompany.com): " SERVER_NAME
 SERVER_NAME=${SERVER_NAME:-localhost}
 
-read -p "Database host [localhost]: " DB_HOST
-DB_HOST=${DB_HOST:-localhost}
-
-read -p "Database port [5432]: " DB_PORT
-DB_PORT=${DB_PORT:-5432}
-
-read -p "Database name [${DB_NAME:-open_helpdesk}]: " DB_NAME_INPUT
-DB_NAME=${DB_NAME_INPUT:-${DB_NAME:-open_helpdesk}}
-
-read -p "Database user [postgres]: " DB_USER
-DB_USER=${DB_USER:-postgres}
-
-read -sp "Database password: " DB_PASSWORD
+echo ""
+echo "  Database"
 echo ""
 
-read -p "Admin email [admin@admin.com]: " ADMIN_EMAIL
-ADMIN_EMAIL=${ADMIN_EMAIL:-admin@admin.com}
+read -p "  Host [localhost]: " DB_HOST
+DB_HOST=${DB_HOST:-localhost}
 
-read -sp "Admin password [admin1234]: " ADMIN_PASSWORD
+read -p "  Port [5432]: " DB_PORT
+DB_PORT=${DB_PORT:-5432}
+
+read -p "  Name [${DB_NAME:-open_helpdesk}]: " DB_NAME_INPUT
+DB_NAME=${DB_NAME_INPUT:-${DB_NAME:-open_helpdesk}}
+
+read -p "  User [postgres]: " DB_USER
+DB_USER=${DB_USER:-postgres}
+
+DB_PASSWORD_DEFAULT=$(openssl rand -hex 16)
+read -sp "  Password [$DB_PASSWORD_DEFAULT]: " DB_PASSWORD_INPUT
+echo ""
+DB_PASSWORD=${DB_PASSWORD_INPUT:-$DB_PASSWORD_DEFAULT}
+
+echo ""
+echo "  Application"
+echo ""
+
+read -p "  Admin email [admin@${SERVER_NAME}]: " ADMIN_EMAIL
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@${SERVER_NAME}}
+
+read -sp "  Admin password [admin1234]: " ADMIN_PASSWORD
 ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin1234}
 echo ""
 
-read -p "App name [Open Helpdesk]: " APP_NAME
+read -p "  App name [Open Helpdesk]: " APP_NAME
 APP_NAME=${APP_NAME:-Open Helpdesk}
 
 JWT_SECRET=$(openssl rand -hex 32)
@@ -138,17 +161,61 @@ else
 fi
 
 echo ""
-echo "── Installing Backend ──"
+
+# ══════════════════════════════════════════════
+# Step 3/6 — Database setup
+# ══════════════════════════════════════════════
+
+echo "── Step 3/6: Database setup ──"
 echo ""
 
-# ── Create system user ──
+# Ensure PostgreSQL is running
+sudo systemctl start postgresql 2>/dev/null || true
 
+# Create database if it doesn't exist
+if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+  echo "[OK] Database '$DB_NAME' already exists"
+else
+  read -p "Database '$DB_NAME' does not exist. Create it? (Y/n): " CREATE_DB
+  if [ "${CREATE_DB,,}" != "n" ]; then
+    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null
+    echo "[OK] Database '$DB_NAME' created"
+  else
+    echo "[WARN] Skipped. Make sure the database exists before starting."
+  fi
+fi
+
+# Configure user password
+if [ -n "$DB_PASSWORD" ]; then
+  read -p "Set password for database user '$DB_USER'? (Y/n): " SET_DB_PASS
+  if [ "${SET_DB_PASS,,}" != "n" ]; then
+    sudo -u postgres psql -c "ALTER USER $DB_USER PASSWORD '$DB_PASSWORD';" 2>/dev/null
+    echo "[OK] Password set for '$DB_USER'"
+
+    # Ensure password auth works for local TCP connections
+    PG_HBA=$(sudo -u postgres psql -t -c "SHOW hba_file;" 2>/dev/null | tr -d ' ')
+    if [ -n "$PG_HBA" ] && grep -q "127.0.0.1/32.*peer" "$PG_HBA" 2>/dev/null; then
+      sudo sed -i 's/127.0.0.1\/32.*peer/127.0.0.1\/32            scram-sha-256/' "$PG_HBA"
+      sudo systemctl reload postgresql
+    fi
+  fi
+fi
+
+echo ""
+
+# ══════════════════════════════════════════════
+# Step 4/6 — Backend
+# ══════════════════════════════════════════════
+
+echo "── Step 4/6: Installing backend ──"
+echo ""
+
+# Create system user
 if ! id "$SERVICE_USER" &> /dev/null; then
   sudo useradd --system --no-create-home --shell /bin/false "$SERVICE_USER" 2>/dev/null || true
 fi
 
-# ── Clone and build backend ──
-
+# Clone and build
 sudo mkdir -p "$INSTALL_DIR"
 
 if [ -d "$INSTALL_DIR/backend/.git" ]; then
@@ -168,8 +235,7 @@ sudo npm install --production=false 2>&1 | tail -1
 echo "Building..."
 sudo npm run build 2>&1 | tail -1
 
-# ── Create backend .env ──
-
+# Create .env
 sudo mkdir -p "$INSTALL_DIR/backend/data/storage"
 
 if [ ! -f "$INSTALL_DIR/backend/.env" ]; then
@@ -196,8 +262,7 @@ fi
 
 sudo chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/backend" 2>/dev/null || true
 
-# ── Create systemd service ──
-
+# Create systemd service
 sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
 Description=Open Helpdesk Backend ($SERVICE_NAME)
@@ -233,10 +298,13 @@ for i in $(seq 1 30); do
 done
 
 echo ""
-echo "── Installing Client ──"
-echo ""
 
-# ── Clone and build client ──
+# ══════════════════════════════════════════════
+# Step 5/6 — Client
+# ══════════════════════════════════════════════
+
+echo "── Step 5/6: Installing client ──"
+echo ""
 
 if [ -d "$INSTALL_DIR/client/.git" ]; then
   echo "Updating client..."
@@ -261,18 +329,19 @@ sudo npm install 2>&1 | tail -1
 echo "Building..."
 sudo npm run build 2>&1 | tail -1
 
-# ── Deploy to nginx ──
-
+# Deploy to web root
 sudo mkdir -p "$WEB_ROOT"
 sudo rm -rf "$WEB_ROOT"/*
 sudo cp -r "$INSTALL_DIR/client/dist/"* "$WEB_ROOT/"
 
 echo "[OK] Client built and deployed"
-
-# ── Configure nginx ──
-
 echo ""
-echo "── Configuring nginx ──"
+
+# ══════════════════════════════════════════════
+# Step 6/6 — nginx
+# ══════════════════════════════════════════════
+
+echo "── Step 6/6: Configuring nginx ──"
 echo ""
 
 # Detect nginx config structure
@@ -324,7 +393,9 @@ sudo nginx -t && sudo systemctl restart nginx
 
 echo "[OK] nginx configured"
 
-# ── Done ──
+# ══════════════════════════════════════════════
+# Done
+# ══════════════════════════════════════════════
 
 echo ""
 echo "  ╔══════════════════════════════════════════════════════╗"
