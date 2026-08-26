@@ -44,7 +44,22 @@ if [ -d "$INSTALL_DIR/backend/.git" ]; then
   echo "  Available: v$LATEST_VERSION ($LATEST_COMMIT)"
   echo ""
 
-  if [ "$CURRENT_COMMIT" = "$LATEST_COMMIT" ]; then
+  # Also check client
+  CLIENT_NEEDS_UPDATE=false
+  if [ -d "$INSTALL_DIR/client/.git" ]; then
+    cd "$INSTALL_DIR/client"
+    git config --global --add safe.directory "$INSTALL_DIR/client" 2>/dev/null || true
+    sudo git fetch origin &>/dev/null
+    CLIENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
+    CLIENT_CURRENT=$(git rev-parse --short HEAD 2>/dev/null)
+    CLIENT_LATEST=$(git rev-parse --short "origin/$CLIENT_BRANCH" 2>/dev/null)
+    if [ "$CLIENT_CURRENT" != "$CLIENT_LATEST" ]; then
+      CLIENT_NEEDS_UPDATE=true
+    fi
+    cd "$INSTALL_DIR/backend"
+  fi
+
+  if [ "$CURRENT_COMMIT" = "$LATEST_COMMIT" ] && [ "$CLIENT_NEEDS_UPDATE" = "false" ]; then
     echo "  Already up to date!"
     echo ""
     exit 0
