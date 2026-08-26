@@ -22,19 +22,23 @@ echo ""
 
 # ── Version check ──
 
+parse_version() {
+  grep -oP "version:\s*'\\K[^']+" "$1" 2>/dev/null | head -1 || echo "unknown"
+}
+
 if [ -d "$INSTALL_DIR/backend/.git" ]; then
   cd "$INSTALL_DIR/backend"
   git config --global --add safe.directory "$INSTALL_DIR/backend" 2>/dev/null || true
 
+  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
+  REMOTE_BRANCH="origin/$BRANCH"
+
   CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null)
-  CURRENT_VERSION=$(node -e "try{const c=require('./src/changelog/changelog.data');console.log(c.coreChangelog[0].version)}catch{console.log('unknown')}" 2>/dev/null || echo "unknown")
+  CURRENT_VERSION=$(parse_version "$INSTALL_DIR/backend/src/changelog/changelog.data.ts")
 
   sudo git fetch origin &>/dev/null
-  LATEST_COMMIT=$(git rev-parse --short origin/main 2>/dev/null)
-  LATEST_VERSION=$(git show origin/main:src/changelog/changelog.data.ts 2>/dev/null | node -e "
-    let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
-      const m=d.match(/version:\s*'([^']+)'/);console.log(m?m[1]:'unknown')
-    })" 2>/dev/null || echo "unknown")
+  LATEST_COMMIT=$(git rev-parse --short "$REMOTE_BRANCH" 2>/dev/null)
+  LATEST_VERSION=$(git show "$REMOTE_BRANCH:src/changelog/changelog.data.ts" 2>/dev/null | grep -oP "version:\s*'\\K[^']+" | head -1 || echo "unknown")
 
   echo "  Current:   v$CURRENT_VERSION ($CURRENT_COMMIT)"
   echo "  Available: v$LATEST_VERSION ($LATEST_COMMIT)"
@@ -46,7 +50,7 @@ if [ -d "$INSTALL_DIR/backend/.git" ]; then
     exit 0
   fi
 
-  CHANGES=$(git log --oneline "$CURRENT_COMMIT..origin/main" 2>/dev/null)
+  CHANGES=$(git log --oneline "$CURRENT_COMMIT..$REMOTE_BRANCH" 2>/dev/null)
   if [ -n "$CHANGES" ]; then
     CHANGE_COUNT=$(echo "$CHANGES" | wc -l)
     echo "  $CHANGE_COUNT new commit(s):"
@@ -103,9 +107,13 @@ fi
 
 # ── Done ──
 
+if [ -z "$LATEST_VERSION" ] && [ -f "$INSTALL_DIR/backend/src/changelog/changelog.data.ts" ]; then
+  LATEST_VERSION=$(parse_version "$INSTALL_DIR/backend/src/changelog/changelog.data.ts")
+fi
+
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║        Update Complete!              ║"
-echo "  ║  Version: v$LATEST_VERSION"
+echo "  ║  Version: v${LATEST_VERSION:-unknown}"
 echo "  ╚══════════════════════════════════════╝"
 echo ""
