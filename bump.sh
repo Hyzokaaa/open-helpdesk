@@ -112,13 +112,39 @@ if [ -n "$(git -C "$REPO_DIR" status --porcelain)" ]; then
   exit 1
 fi
 
+# ── Compatibility check (client only) ──
+
+if [ "$COMPONENT" = "client" ]; then
+  BACKEND_DIR="$PARENT_DIR/backend"
+  CURRENT_COMPAT=$(node -p "
+    const pkg = JSON.parse(require('fs').readFileSync('$REPO_DIR/package.json','utf-8'));
+    pkg.compatibility && pkg.compatibility.backend ? pkg.compatibility.backend : '';
+  " 2>/dev/null || echo "")
+
+  if [ -d "$BACKEND_DIR" ]; then
+    BACKEND_VERSION=$(node -p "require('$BACKEND_DIR/package.json').version" 2>/dev/null || echo "unknown")
+    echo "  Compatibility: backend $CURRENT_COMPAT"
+    echo "  Backend is at: v$BACKEND_VERSION"
+    echo ""
+    read -p "  Does this version require a newer backend? (y/N): " COMPAT_UPDATE
+    if [ "${COMPAT_UPDATE,,}" = "y" ]; then
+      NEW_COMPAT=">=$BACKEND_VERSION <2.0.0"
+      echo "  Updated compatibility: backend $NEW_COMPAT"
+    fi
+  fi
+  echo ""
+fi
+
 # ── Confirm ──
 
 echo "  Will:"
 echo "    1. Update package.json version to $NEW_VERSION"
-echo "    2. Commit and push to $BRANCH"
-echo "    3. Create tag v$NEW_VERSION (on $BRANCH)"
-echo "    4. Push tag and create GitHub Release"
+if [ -n "${NEW_COMPAT:-}" ]; then
+echo "    2. Update compatibility to backend $NEW_COMPAT"
+fi
+echo "    3. Commit and push to $BRANCH"
+echo "    4. Create tag v$NEW_VERSION (on $BRANCH)"
+echo "    5. Push tag and create GitHub Release"
 echo ""
 read -p "  Proceed? (Y/n): " CONFIRM
 if [ "${CONFIRM,,}" = "n" ]; then
@@ -135,6 +161,10 @@ const fs = require('fs');
 const path = '$REPO_DIR/package.json';
 const pkg = JSON.parse(fs.readFileSync(path, 'utf-8'));
 pkg.version = '$NEW_VERSION';
+if ('${NEW_COMPAT:-}') {
+  if (!pkg.compatibility) pkg.compatibility = {};
+  pkg.compatibility.backend = '${NEW_COMPAT:-}';
+}
 fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
 "
 echo "  [OK] $COMPONENT → v$NEW_VERSION"
