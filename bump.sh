@@ -17,6 +17,23 @@ PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 COMPONENT="${1}"
 VERSION_ARG="${2}"
 
+# ── Helpers ──
+
+# Convert MINGW paths (/c/...) to Windows paths (C:/...) for Node.js
+to_node_path() {
+  if [[ "$1" =~ ^/([a-zA-Z])/ ]]; then
+    echo "${BASH_REMATCH[1]^}:/${1:3}"
+  else
+    echo "$1"
+  fi
+}
+
+read_pkg_field() {
+  local file="$1"
+  local field="$2"
+  grep "\"$field\"" "$file" | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/'
+}
+
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║     Component Version Bump           ║"
@@ -41,7 +58,7 @@ fi
 
 # ── Read current version ──
 
-CURRENT_VERSION=$(node -p "require('$REPO_DIR/package.json').version" 2>/dev/null)
+CURRENT_VERSION=$(read_pkg_field "$REPO_DIR/package.json" "version")
 echo "  Component:  $COMPONENT"
 echo "  Current:    v$CURRENT_VERSION"
 
@@ -116,13 +133,10 @@ fi
 
 if [ "$COMPONENT" = "client" ]; then
   BACKEND_DIR="$PARENT_DIR/backend"
-  CURRENT_COMPAT=$(node -p "
-    const pkg = JSON.parse(require('fs').readFileSync('$REPO_DIR/package.json','utf-8'));
-    pkg.compatibility && pkg.compatibility.backend ? pkg.compatibility.backend : '';
-  " 2>/dev/null || echo "")
+  CURRENT_COMPAT=$(read_pkg_field "$REPO_DIR/package.json" "backend" 2>/dev/null || echo "")
 
   if [ -d "$BACKEND_DIR" ]; then
-    BACKEND_VERSION=$(node -p "require('$BACKEND_DIR/package.json').version" 2>/dev/null || echo "unknown")
+    BACKEND_VERSION=$(read_pkg_field "$BACKEND_DIR/package.json" "version")
     echo "  Compatibility: backend $CURRENT_COMPAT"
     echo "  Backend is at: v$BACKEND_VERSION"
     echo ""
@@ -156,9 +170,10 @@ echo ""
 # ── Update package.json ──
 
 echo "── Updating package.json ──"
+NODE_PKG_PATH=$(to_node_path "$REPO_DIR/package.json")
 node -e "
 const fs = require('fs');
-const path = '$REPO_DIR/package.json';
+const path = '$NODE_PKG_PATH';
 const pkg = JSON.parse(fs.readFileSync(path, 'utf-8'));
 pkg.version = '$NEW_VERSION';
 if ('${NEW_COMPAT:-}') {

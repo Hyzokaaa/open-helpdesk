@@ -21,6 +21,28 @@ BACKEND_DIR="$PARENT_DIR/backend"
 CLIENT_DIR="$PARENT_DIR/client"
 UMBRELLA_DIR="$SCRIPT_DIR"
 
+# ── Helpers ──
+
+to_node_path() {
+  if [[ "$1" =~ ^/([a-zA-Z])/ ]]; then
+    echo "${BASH_REMATCH[1]^}:/${1:3}"
+  else
+    echo "$1"
+  fi
+}
+
+read_pkg_field() {
+  local file="$1"
+  local field="$2"
+  grep "\"$field\"" "$file" | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/'
+}
+
+read_json_first() {
+  local file="$1"
+  local field="$2"
+  grep "\"$field\"" "$file" | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/'
+}
+
 bump_version() {
   local version=$1
   local type=$2
@@ -44,7 +66,7 @@ echo ""
 RELEASES_FILE="$UMBRELLA_DIR/releases.json"
 CURRENT_PRODUCT=""
 if [ -f "$RELEASES_FILE" ]; then
-  CURRENT_PRODUCT=$(node -p "JSON.parse(require('fs').readFileSync('$RELEASES_FILE','utf-8'))[0].product" 2>/dev/null || echo "")
+  CURRENT_PRODUCT=$(read_json_first "$RELEASES_FILE" "product")
 fi
 
 # ── Validate args ──
@@ -129,8 +151,8 @@ echo ""
 
 # ── Read component versions ──
 
-BACKEND_VERSION=$(node -p "require('$BACKEND_DIR/package.json').version" 2>/dev/null)
-CLIENT_VERSION=$(node -p "require('$CLIENT_DIR/package.json').version" 2>/dev/null)
+BACKEND_VERSION=$(read_pkg_field "$BACKEND_DIR/package.json" "version")
+CLIENT_VERSION=$(read_pkg_field "$CLIENT_DIR/package.json" "version")
 
 echo "── Component versions ──"
 echo "  backend:  v$BACKEND_VERSION"
@@ -177,12 +199,13 @@ echo ""
 echo "── Updating releases.json ──"
 DATE=$(date +%Y-%m-%d)
 
-RELEASES_FILE="$UMBRELLA_DIR/releases.json"
+NODE_RELEASES_PATH=$(to_node_path "$RELEASES_FILE")
 TEMP_FILE=$(mktemp)
+NODE_TEMP_PATH=$(to_node_path "$TEMP_FILE")
 
 node -e "
 const fs = require('fs');
-const releases = JSON.parse(fs.readFileSync('$RELEASES_FILE', 'utf-8'));
+const releases = JSON.parse(fs.readFileSync('$NODE_RELEASES_PATH', 'utf-8'));
 releases.unshift({
   product: '$VERSION',
   date: '$DATE',
@@ -191,7 +214,7 @@ releases.unshift({
     client: '$CLIENT_VERSION'
   }
 });
-fs.writeFileSync('$TEMP_FILE', JSON.stringify(releases, null, 2) + '\n');
+fs.writeFileSync('$NODE_TEMP_PATH', JSON.stringify(releases, null, 2) + '\n');
 "
 mv "$TEMP_FILE" "$RELEASES_FILE"
 
@@ -216,18 +239,13 @@ echo ""
 
 echo "── Creating GitHub Releases ──"
 
-# Backend release with changelog
-CHANGELOG_BODY=$(node -e "
-const data = require('$CHANGELOG_FILE'.replace(/\.ts$/, ''));
-// Fallback: parse manually if require fails
-" 2>/dev/null || echo "")
-
-# Extract changelog for this version using grep
-RELEASE_NOTES=""
+# Extract changelog for this version
+RELEASE_NOTES="See changelog for details."
+NODE_CHANGELOG_PATH=$(to_node_path "$CHANGELOG_FILE")
 if [ -f "$CHANGELOG_FILE" ]; then
   RELEASE_NOTES=$(node -e "
     const fs = require('fs');
-    const content = fs.readFileSync('$CHANGELOG_FILE', 'utf-8');
+    const content = fs.readFileSync('$NODE_CHANGELOG_PATH', 'utf-8');
     const versionBlock = content.split(\"version: '$VERSION'\")[1];
     if (!versionBlock) { console.log('See changelog for details.'); process.exit(0); }
     const categories = versionBlock.split(\"title: { en: '\").slice(1);
