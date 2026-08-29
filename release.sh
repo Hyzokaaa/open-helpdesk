@@ -139,9 +139,9 @@ for DIR in "$BACKEND_DIR" "$CLIENT_DIR"; do
   MAIN_COMMIT=$(git -C "$DIR" rev-parse origin/main 2>/dev/null)
   DEV_COMMIT=$(git -C "$DIR" rev-parse origin/dev 2>/dev/null)
 
-  if [ "$MAIN_COMMIT" != "$DEV_COMMIT" ]; then
-    BEHIND=$(git -C "$DIR" rev-list --count origin/main..origin/dev 2>/dev/null || echo "?")
-    echo "  [WARN] $REPO_NAME: dev is $BEHIND commit(s) ahead of main"
+  AHEAD=$(git -C "$DIR" rev-list --count origin/main..origin/dev 2>/dev/null || echo "0")
+  if [ "$AHEAD" -gt 0 ] 2>/dev/null; then
+    echo "  [WARN] $REPO_NAME: dev is $AHEAD commit(s) ahead of main"
     echo "         Merge dev → main before releasing."
   else
     echo "  [OK] $REPO_NAME: main is up to date"
