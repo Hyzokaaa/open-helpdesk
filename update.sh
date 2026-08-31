@@ -2,17 +2,19 @@
 set -e
 
 # Open Helpdesk - Update Script
-# Checks for updates, shows compatibility, and lets you choose what to update.
+# Checks for updates against stable releases and lets you choose how to update.
 #
 # Usage:
-#   bash update.sh           # interactive — check and choose
-#   bash update.sh all       # update backend + client
-#   bash update.sh backend   # update backend only
-#   bash update.sh client    # update client only
+#   bash update.sh                      # interactive (recommended)
+#   bash update.sh --release            # update to latest stable release
+#   bash update.sh --branch main        # update to latest commit on a branch
+#   bash update.sh --branch dev         # update to latest commit on dev
+#   bash update.sh --version 1.21.0     # update to a specific product version
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/open-helpdesk}"
 WEB_ROOT="${WEB_ROOT:-/var/www/openhelpdesk}"
 SERVICE_NAME="${SERVICE_NAME:-openhelpdesk-backend}"
+GITHUB_UMBRELLA="Hyzokaaa/open-helpdesk"
 
 export PATH="$PATH:/usr/sbin"
 
@@ -28,16 +30,10 @@ read_pkg_version() {
   node -p "require('$1/package.json').version" 2>/dev/null || echo "unknown"
 }
 
-read_remote_pkg_version() {
-  local dir=$1
-  local branch=$2
-  git -C "$dir" show "origin/$branch:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).version" 2>/dev/null || echo "unknown"
-}
-
 read_remote_compatibility() {
   local dir=$1
-  local branch=$2
-  git -C "$dir" show "origin/$branch:package.json" 2>/dev/null | node -p "
+  local ref=$2
+  git -C "$dir" show "$ref:package.json" 2>/dev/null | node -p "
     const pkg = JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));
     pkg.compatibility && pkg.compatibility.backend ? pkg.compatibility.backend : '';
   " 2>/dev/null || echo ""
@@ -47,16 +43,54 @@ version_satisfies() {
   local version=$1
   local range=$2
   node -e "
-    const [, minOp, minVer] = '$range'.match(/^(>=?)(\d+\.\d+\.\d+)/) || [];
+    const [, , minVer] = '$range'.match(/^(>=?)(\d+\.\d+\.\d+)/) || [];
     const [, , maxVer] = '$range'.match(/<(\d+\.\d+\.\d+)/) || [];
     const v = '$version'.split('.').map(Number);
     const min = (minVer || '0.0.0').split('.').map(Number);
     const max = (maxVer || '999.999.999').split('.').map(Number);
     const gte = (a, b) => a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] >= b[2])));
     const lt = (a, b) => a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])));
-    const ok = gte(v, min) && lt(v, max);
-    process.exit(ok ? 0 : 1);
+    process.exit(gte(v, min) && lt(v, max) ? 0 : 1);
   " 2>/dev/null
+}
+
+compare_versions() {
+  node -e "
+    const a = '$1'.split('.').map(Number);
+    const b = '$2'.split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if ((a[i]||0) < (b[i]||0)) { process.stdout.write('lt'); process.exit(); }
+      if ((a[i]||0) > (b[i]||0)) { process.stdout.write('gt'); process.exit(); }
+    }
+    process.stdout.write('eq');
+  " 2>/dev/null
+}
+
+fetch_latest_release() {
+  local json
+  json=$(curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: OpenHelpdesk" \
+    "https://api.github.com/repos/$GITHUB_UMBRELLA/releases/latest" 2>/dev/null) || return 1
+
+  RELEASE_PRODUCT=$(echo "$json" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).tag_name.replace(/^v/,'')" 2>/dev/null)
+  RELEASE_URL=$(echo "$json" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).html_url" 2>/dev/null)
+  local body
+  body=$(echo "$json" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).body" 2>/dev/null)
+  RELEASE_BACKEND=$(echo "$body" | grep -oi 'backend:\s*v\?[0-9.]*' | grep -o '[0-9][0-9.]*' | head -1)
+  RELEASE_CLIENT=$(echo "$body" | grep -oi 'client:\s*v\?[0-9.]*' | grep -o '[0-9][0-9.]*' | head -1)
+}
+
+fetch_release_by_version() {
+  local version=$1
+  local json
+  json=$(curl -sf -H "Accept: application/vnd.github.v3+json" -H "User-Agent: OpenHelpdesk" \
+    "https://api.github.com/repos/$GITHUB_UMBRELLA/releases/tags/v$version" 2>/dev/null) || return 1
+
+  RELEASE_PRODUCT="$version"
+  RELEASE_URL=$(echo "$json" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).html_url" 2>/dev/null)
+  local body
+  body=$(echo "$json" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).body" 2>/dev/null)
+  RELEASE_BACKEND=$(echo "$body" | grep -oi 'backend:\s*v\?[0-9.]*' | grep -o '[0-9][0-9.]*' | head -1)
+  RELEASE_CLIENT=$(echo "$body" | grep -oi 'client:\s*v\?[0-9.]*' | grep -o '[0-9][0-9.]*' | head -1)
 }
 
 # ── Validate repos ──
@@ -76,207 +110,289 @@ if [ "$HAS_BACKEND" = "false" ] && [ "$HAS_CLIENT" = "false" ]; then
   exit 1
 fi
 
-# ── Fetch latest ──
-
-echo "── Checking for updates ──"
-echo ""
+# ── Read current versions ──
 
 if [ "$HAS_BACKEND" = "true" ]; then
   git -C "$BACKEND_DIR" config --global --add safe.directory "$BACKEND_DIR" 2>/dev/null || true
-  BACKEND_BRANCH=$(git -C "$BACKEND_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-  sudo git -C "$BACKEND_DIR" fetch origin --quiet &>/dev/null
+  BACKEND_CURRENT=$(read_pkg_version "$BACKEND_DIR")
 fi
 
 if [ "$HAS_CLIENT" = "true" ]; then
   git -C "$CLIENT_DIR" config --global --add safe.directory "$CLIENT_DIR" 2>/dev/null || true
-  CLIENT_BRANCH=$(git -C "$CLIENT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-  sudo git -C "$CLIENT_DIR" fetch origin --quiet &>/dev/null
-fi
-
-# ── Read versions ──
-
-BACKEND_UPDATE=false
-CLIENT_UPDATE=false
-
-if [ "$HAS_BACKEND" = "true" ]; then
-  BACKEND_CURRENT=$(read_pkg_version "$BACKEND_DIR")
-  BACKEND_LATEST=$(read_remote_pkg_version "$BACKEND_DIR" "$BACKEND_BRANCH")
-  BACKEND_CURRENT_COMMIT=$(git -C "$BACKEND_DIR" rev-parse --short HEAD 2>/dev/null)
-  BACKEND_LATEST_COMMIT=$(git -C "$BACKEND_DIR" rev-parse --short "origin/$BACKEND_BRANCH" 2>/dev/null)
-
-  if [ "$BACKEND_CURRENT_COMMIT" != "$BACKEND_LATEST_COMMIT" ]; then
-    BACKEND_UPDATE=true
-  fi
-fi
-
-if [ "$HAS_CLIENT" = "true" ]; then
   CLIENT_CURRENT=$(read_pkg_version "$CLIENT_DIR")
-  CLIENT_LATEST=$(read_remote_pkg_version "$CLIENT_DIR" "$CLIENT_BRANCH")
-  CLIENT_CURRENT_COMMIT=$(git -C "$CLIENT_DIR" rev-parse --short HEAD 2>/dev/null)
-  CLIENT_LATEST_COMMIT=$(git -C "$CLIENT_DIR" rev-parse --short "origin/$CLIENT_BRANCH" 2>/dev/null)
-  CLIENT_COMPAT=$(read_remote_compatibility "$CLIENT_DIR" "$CLIENT_BRANCH")
-
-  if [ "$CLIENT_CURRENT_COMMIT" != "$CLIENT_LATEST_COMMIT" ]; then
-    CLIENT_UPDATE=true
-  fi
 fi
 
-# ── Display status ──
+echo "  Current:"
+[ "$HAS_BACKEND" = "true" ] && echo "    Backend:   v$BACKEND_CURRENT"
+[ "$HAS_CLIENT" = "true" ] && echo "    Client:    v$CLIENT_CURRENT"
+echo ""
+
+# ── Fetch latest release from GitHub ──
+
+echo "  Checking for updates..."
+echo ""
+
+RELEASE_PRODUCT=""
+RELEASE_BACKEND=""
+RELEASE_CLIENT=""
+RELEASE_URL=""
+
+if fetch_latest_release; then
+  BACKEND_VS_RELEASE=$(compare_versions "$BACKEND_CURRENT" "$RELEASE_BACKEND")
+  CLIENT_VS_RELEASE=$(compare_versions "$CLIENT_CURRENT" "$RELEASE_CLIENT")
+
+  if [ "$BACKEND_VS_RELEASE" = "lt" ] || [ "$CLIENT_VS_RELEASE" = "lt" ]; then
+    echo "  Latest stable release: Open Helpdesk v$RELEASE_PRODUCT (update available)"
+  else
+    echo "  Latest stable release: Open Helpdesk v$RELEASE_PRODUCT (up to date)"
+  fi
+  echo "    Backend:   v$RELEASE_BACKEND"
+  echo "    Client:    v$RELEASE_CLIENT"
+else
+  echo "  [!] Could not fetch release info from GitHub."
+  echo "      You can still update from a branch."
+fi
+echo ""
+
+# ── Fetch latest branch info ──
 
 if [ "$HAS_BACKEND" = "true" ]; then
-  if [ "$BACKEND_UPDATE" = "true" ]; then
-    echo "  Backend:   v$BACKEND_CURRENT → v$BACKEND_LATEST  (update available)"
-    CHANGES=$(git -C "$BACKEND_DIR" log --oneline "$BACKEND_CURRENT_COMMIT..$BACKEND_LATEST_COMMIT" 2>/dev/null || true)
-    if [ -n "$CHANGES" ]; then
-      CHANGE_COUNT=$(echo "$CHANGES" | wc -l)
-      echo "             $CHANGE_COUNT new commit(s)"
-    fi
-  else
-    echo "  Backend:   v$BACKEND_CURRENT  (up to date)"
-  fi
+  sudo git -C "$BACKEND_DIR" fetch origin --tags --quiet &>/dev/null || true
+fi
+if [ "$HAS_CLIENT" = "true" ]; then
+  sudo git -C "$CLIENT_DIR" fetch origin --tags --quiet &>/dev/null || true
 fi
 
-if [ "$HAS_CLIENT" = "true" ]; then
-  if [ "$CLIENT_UPDATE" = "true" ]; then
-    echo "  Client:    v$CLIENT_CURRENT → v$CLIENT_LATEST  (update available)"
-    CHANGES=$(git -C "$CLIENT_DIR" log --oneline "$CLIENT_CURRENT_COMMIT..$CLIENT_LATEST_COMMIT" 2>/dev/null || true)
-    if [ -n "$CHANGES" ]; then
-      CHANGE_COUNT=$(echo "$CHANGES" | wc -l)
-      echo "             $CHANGE_COUNT new commit(s)"
-    fi
-  else
-    echo "  Client:    v$CLIENT_CURRENT  (up to date)"
-  fi
+# ── Parse CLI arguments ──
+
+MODE=""
+ARG_BRANCH=""
+ARG_VERSION=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --release)  MODE="release"; shift ;;
+    --branch)   MODE="branch"; ARG_BRANCH="${2}"; shift 2 ;;
+    --version)  MODE="version"; ARG_VERSION="${2}"; shift 2 ;;
+    *)          echo "  Usage: bash update.sh [--release | --branch <name> | --version <x.y.z>]"; exit 1 ;;
+  esac
+done
+
+# ── Interactive mode ──
+
+if [ -z "$MODE" ]; then
+  echo "  What would you like to do?"
+  echo ""
+  echo "    1) Update to latest stable release (v${RELEASE_PRODUCT:-?}) — recommended"
+  echo "    2) Update to latest branch commit (advanced)"
+  echo "    3) Update to a specific product version"
+  echo "    0) Cancel"
+  echo ""
+  read -p "  Choose [1]: " CHOICE
+  CHOICE="${CHOICE:-1}"
+
+  case "$CHOICE" in
+    1) MODE="release" ;;
+    2)
+      MODE="branch"
+      echo ""
+      echo "    Available branches:"
+      echo "      a) main — stable, between releases"
+      echo "      b) dev  — bleeding edge"
+      echo ""
+      read -p "    Choose branch [main]: " BR_CHOICE
+      case "${BR_CHOICE:-a}" in
+        a|main) ARG_BRANCH="main" ;;
+        b|dev)  ARG_BRANCH="dev" ;;
+        *)      ARG_BRANCH="$BR_CHOICE" ;;
+      esac
+      ;;
+    3)
+      MODE="version"
+      read -p "  Enter product version (e.g. 1.21.0): " ARG_VERSION
+      ;;
+    0) echo "  Cancelled."; exit 0 ;;
+    *) echo "  Invalid choice."; exit 1 ;;
+  esac
 fi
 
 echo ""
 
-# ── Nothing to update? ──
+# ── Resolve target versions ──
 
-if [ "$BACKEND_UPDATE" = "false" ] && [ "$CLIENT_UPDATE" = "false" ]; then
-  echo "  Everything is up to date!"
-  echo ""
-  exit 0
-fi
+TARGET_BACKEND=""
+TARGET_CLIENT=""
+UPDATE_METHOD="" # "tag" or "branch"
 
-# ── Compatibility check ──
+case "$MODE" in
+  release)
+    if [ -z "$RELEASE_PRODUCT" ]; then
+      echo "  [ERROR] No release info available. Cannot update to stable release."
+      exit 1
+    fi
+    TARGET_BACKEND="$RELEASE_BACKEND"
+    TARGET_CLIENT="$RELEASE_CLIENT"
+    UPDATE_METHOD="tag"
+    echo "  Updating to Open Helpdesk v$RELEASE_PRODUCT"
+    echo "    Backend:   v$BACKEND_CURRENT → v$TARGET_BACKEND"
+    echo "    Client:    v$CLIENT_CURRENT → v$TARGET_CLIENT"
+    ;;
+  version)
+    if [ -z "$ARG_VERSION" ]; then
+      echo "  [ERROR] No version specified."; exit 1
+    fi
+    echo "  Fetching release v$ARG_VERSION..."
+    if ! fetch_release_by_version "$ARG_VERSION"; then
+      echo "  [ERROR] Release v$ARG_VERSION not found on GitHub."; exit 1
+    fi
+    TARGET_BACKEND="$RELEASE_BACKEND"
+    TARGET_CLIENT="$RELEASE_CLIENT"
+    UPDATE_METHOD="tag"
+    echo "  Updating to Open Helpdesk v$ARG_VERSION"
+    echo "    Backend:   v$BACKEND_CURRENT → v$TARGET_BACKEND"
+    echo "    Client:    v$CLIENT_CURRENT → v$TARGET_CLIENT"
+    ;;
+  branch)
+    if [ -z "$ARG_BRANCH" ]; then
+      echo "  [ERROR] No branch specified."; exit 1
+    fi
+    UPDATE_METHOD="branch"
+    echo "  Updating to latest commit on branch '$ARG_BRANCH'"
+    ;;
+esac
 
-COMPAT_WARN=""
+echo ""
 
-if [ "$CLIENT_UPDATE" = "true" ] && [ -n "$CLIENT_COMPAT" ]; then
-  # Check if current backend satisfies the new client's requirement
-  BACKEND_TO_CHECK="$BACKEND_CURRENT"
-  if [ "$BACKEND_UPDATE" = "true" ]; then
-    BACKEND_TO_CHECK="$BACKEND_LATEST"
+# ── Compatibility check (for tag-based updates) ──
+
+if [ "$UPDATE_METHOD" = "tag" ]; then
+  # Check if target versions are same or older than current
+  if [ "$HAS_BACKEND" = "true" ]; then
+    CMP=$(compare_versions "$BACKEND_CURRENT" "$TARGET_BACKEND")
+    if [ "$CMP" = "gt" ]; then
+      echo "  [!] Warning: Backend would downgrade from v$BACKEND_CURRENT to v$TARGET_BACKEND"
+      read -p "  Continue anyway? (y/N): " CONFIRM
+      [ "${CONFIRM,,}" = "y" ] || exit 0
+    elif [ "$CMP" = "eq" ]; then
+      echo "  Backend is already at v$TARGET_BACKEND"
+    fi
   fi
 
-  if ! version_satisfies "$BACKEND_TO_CHECK" "$CLIENT_COMPAT"; then
-    COMPAT_WARN="  [!] Client v$CLIENT_LATEST requires backend $CLIENT_COMPAT"
-    if [ "$BACKEND_UPDATE" = "false" ]; then
-      COMPAT_WARN="$COMPAT_WARN
-  [!] Your backend is v$BACKEND_CURRENT — update backend first!"
-    else
-      COMPAT_WARN="$COMPAT_WARN
-  [!] Backend v$BACKEND_LATEST satisfies this — update backend before or together with client"
+  if [ "$HAS_CLIENT" = "true" ]; then
+    CMP=$(compare_versions "$CLIENT_CURRENT" "$TARGET_CLIENT")
+    if [ "$CMP" = "gt" ]; then
+      echo "  [!] Warning: Client would downgrade from v$CLIENT_CURRENT to v$TARGET_CLIENT"
+      read -p "  Continue anyway? (y/N): " CONFIRM
+      [ "${CONFIRM,,}" = "y" ] || exit 0
+    elif [ "$CMP" = "eq" ]; then
+      echo "  Client is already at v$TARGET_CLIENT"
+    fi
+  fi
+
+  # Check client compatibility with backend
+  if [ "$HAS_CLIENT" = "true" ] && [ "$HAS_BACKEND" = "true" ]; then
+    CLIENT_COMPAT=$(read_remote_compatibility "$CLIENT_DIR" "v$TARGET_CLIENT" 2>/dev/null || echo "")
+    if [ -n "$CLIENT_COMPAT" ]; then
+      if ! version_satisfies "$TARGET_BACKEND" "$CLIENT_COMPAT"; then
+        echo ""
+        echo "  [ERROR] Client v$TARGET_CLIENT requires backend $CLIENT_COMPAT"
+        echo "  but target backend is v$TARGET_BACKEND"
+        exit 1
+      fi
     fi
   fi
 fi
 
-# Check: updating only client when backend needs update too
-if [ "$CLIENT_UPDATE" = "true" ] && [ "$BACKEND_UPDATE" = "true" ] && [ -n "$CLIENT_COMPAT" ]; then
-  if ! version_satisfies "$BACKEND_CURRENT" "$CLIENT_COMPAT"; then
-    COMPAT_BLOCK_CLIENT=true
+# ── Compatibility check (for branch updates) ──
+
+if [ "$UPDATE_METHOD" = "branch" ]; then
+  if [ "$HAS_CLIENT" = "true" ] && [ "$HAS_BACKEND" = "true" ]; then
+    CLIENT_COMPAT=$(read_remote_compatibility "$CLIENT_DIR" "origin/$ARG_BRANCH" 2>/dev/null || echo "")
+    if [ -n "$CLIENT_COMPAT" ]; then
+      BACKEND_BRANCH_VERSION=$(git -C "$BACKEND_DIR" show "origin/$ARG_BRANCH:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).version" 2>/dev/null || echo "unknown")
+      if [ "$BACKEND_BRANCH_VERSION" != "unknown" ] && ! version_satisfies "$BACKEND_BRANCH_VERSION" "$CLIENT_COMPAT"; then
+        echo "  [!] Warning: Client on '$ARG_BRANCH' requires backend $CLIENT_COMPAT"
+        echo "  but backend on '$ARG_BRANCH' is v$BACKEND_BRANCH_VERSION"
+        read -p "  Continue anyway? (y/N): " CONFIRM
+        [ "${CONFIRM,,}" = "y" ] || exit 0
+      fi
+    fi
   fi
 fi
 
-if [ -n "$COMPAT_WARN" ]; then
-  echo "$COMPAT_WARN"
-  echo ""
-fi
+# ── Confirm ──
 
-# ── Choose what to update ──
-
-UPDATE_BACKEND=false
-UPDATE_CLIENT=false
-
-MODE="${1}"
-
-if [ -z "$MODE" ]; then
-  echo "  What would you like to update?"
-  echo ""
-  if [ "$BACKEND_UPDATE" = "true" ] && [ "$CLIENT_UPDATE" = "true" ]; then
-    echo "    1) All (backend + client)"
-    echo "    2) Backend only"
-    echo "    3) Client only"
-    echo "    0) Cancel"
-    echo ""
-    read -p "  Choose [1]: " CHOICE
-    CHOICE="${CHOICE:-1}"
-    case "$CHOICE" in
-      1) UPDATE_BACKEND=true; UPDATE_CLIENT=true ;;
-      2) UPDATE_BACKEND=true ;;
-      3) UPDATE_CLIENT=true ;;
-      0) echo "  Cancelled."; exit 0 ;;
-      *) echo "  Invalid choice."; exit 1 ;;
-    esac
-  elif [ "$BACKEND_UPDATE" = "true" ]; then
-    read -p "  Update backend to v$BACKEND_LATEST? (Y/n): " CONFIRM
-    [ "${CONFIRM,,}" != "n" ] && UPDATE_BACKEND=true || exit 0
-  elif [ "$CLIENT_UPDATE" = "true" ]; then
-    read -p "  Update client to v$CLIENT_LATEST? (Y/n): " CONFIRM
-    [ "${CONFIRM,,}" != "n" ] && UPDATE_CLIENT=true || exit 0
-  fi
-else
-  case "$MODE" in
-    all)     UPDATE_BACKEND=true; UPDATE_CLIENT=true ;;
-    backend) UPDATE_BACKEND=true ;;
-    client)  UPDATE_CLIENT=true ;;
-    *)       echo "  Usage: bash update.sh [all|backend|client]"; exit 1 ;;
-  esac
-fi
-
-# ── Block incompatible updates ──
-
-if [ "$UPDATE_CLIENT" = "true" ] && [ "$UPDATE_BACKEND" = "false" ] && [ "${COMPAT_BLOCK_CLIENT:-false}" = "true" ]; then
-  echo ""
-  echo "  [ERROR] Cannot update client alone."
-  echo "  Client v$CLIENT_LATEST requires backend $CLIENT_COMPAT"
-  echo "  Your backend is v$BACKEND_CURRENT — update backend first or choose 'all'."
-  echo ""
-  exit 1
-fi
+read -p "  Proceed with update? (Y/n): " CONFIRM
+[ "${CONFIRM,,}" != "n" ] || { echo "  Cancelled."; exit 0; }
 
 echo ""
 
 # ── Update backend ──
 
-if [ "$UPDATE_BACKEND" = "true" ] && [ "$HAS_BACKEND" = "true" ]; then
-  echo "── Updating Backend (v$BACKEND_CURRENT → v$BACKEND_LATEST) ──"
-  cd "$BACKEND_DIR"
-  sudo git pull
-  echo "Installing dependencies..."
-  sudo npm install --production=false 2>&1 | tail -1
-  echo "Building..."
-  sudo npm run build 2>&1 | tail -1
-  sudo systemctl restart "$SERVICE_NAME"
-  echo "[OK] Backend updated to v$BACKEND_LATEST"
-  echo ""
+if [ "$HAS_BACKEND" = "true" ]; then
+  if [ "$UPDATE_METHOD" = "tag" ]; then
+    CMP=$(compare_versions "$BACKEND_CURRENT" "$TARGET_BACKEND")
+    if [ "$CMP" != "eq" ]; then
+      echo "── Updating Backend (v$BACKEND_CURRENT → v$TARGET_BACKEND) ──"
+      cd "$BACKEND_DIR"
+      sudo git checkout "v$TARGET_BACKEND" --quiet
+      echo "Installing dependencies..."
+      sudo npm install --production=false 2>&1 | tail -1
+      echo "Building..."
+      sudo npm run build 2>&1 | tail -1
+      sudo systemctl restart "$SERVICE_NAME"
+      echo "[OK] Backend updated to v$TARGET_BACKEND"
+      echo ""
+    fi
+  else
+    echo "── Updating Backend (branch: $ARG_BRANCH) ──"
+    cd "$BACKEND_DIR"
+    sudo git checkout "$ARG_BRANCH" --quiet 2>/dev/null || sudo git checkout -b "$ARG_BRANCH" "origin/$ARG_BRANCH" --quiet
+    sudo git pull origin "$ARG_BRANCH"
+    echo "Installing dependencies..."
+    sudo npm install --production=false 2>&1 | tail -1
+    echo "Building..."
+    sudo npm run build 2>&1 | tail -1
+    sudo systemctl restart "$SERVICE_NAME"
+    BACKEND_NEW=$(read_pkg_version "$BACKEND_DIR")
+    echo "[OK] Backend updated to v$BACKEND_NEW ($ARG_BRANCH)"
+    echo ""
+  fi
 fi
 
 # ── Update client ──
 
-if [ "$UPDATE_CLIENT" = "true" ] && [ "$HAS_CLIENT" = "true" ]; then
-  echo "── Updating Client (v$CLIENT_CURRENT → v$CLIENT_LATEST) ──"
-  cd "$CLIENT_DIR"
-  sudo git pull
-  echo "Installing dependencies..."
-  sudo npm install 2>&1 | tail -1
-  echo "Building..."
-  sudo npm run build 2>&1 | tail -1
-  sudo rm -rf "$WEB_ROOT"/*
-  sudo cp -r "$CLIENT_DIR/dist/"* "$WEB_ROOT/"
-  echo "[OK] Client updated to v$CLIENT_LATEST"
-  echo ""
+if [ "$HAS_CLIENT" = "true" ]; then
+  if [ "$UPDATE_METHOD" = "tag" ]; then
+    CMP=$(compare_versions "$CLIENT_CURRENT" "$TARGET_CLIENT")
+    if [ "$CMP" != "eq" ]; then
+      echo "── Updating Client (v$CLIENT_CURRENT → v$TARGET_CLIENT) ──"
+      cd "$CLIENT_DIR"
+      sudo git checkout "v$TARGET_CLIENT" --quiet
+      echo "Installing dependencies..."
+      sudo npm install 2>&1 | tail -1
+      echo "Building..."
+      sudo npm run build 2>&1 | tail -1
+      sudo rm -rf "$WEB_ROOT"/*
+      sudo cp -r "$CLIENT_DIR/dist/"* "$WEB_ROOT/"
+      echo "[OK] Client updated to v$TARGET_CLIENT"
+      echo ""
+    fi
+  else
+    echo "── Updating Client (branch: $ARG_BRANCH) ──"
+    cd "$CLIENT_DIR"
+    sudo git checkout "$ARG_BRANCH" --quiet 2>/dev/null || sudo git checkout -b "$ARG_BRANCH" "origin/$ARG_BRANCH" --quiet
+    sudo git pull origin "$ARG_BRANCH"
+    echo "Installing dependencies..."
+    sudo npm install 2>&1 | tail -1
+    echo "Building..."
+    sudo npm run build 2>&1 | tail -1
+    sudo rm -rf "$WEB_ROOT"/*
+    sudo cp -r "$CLIENT_DIR/dist/"* "$WEB_ROOT/"
+    CLIENT_NEW=$(read_pkg_version "$CLIENT_DIR")
+    echo "[OK] Client updated to v$CLIENT_NEW ($ARG_BRANCH)"
+    echo ""
+  fi
 fi
 
 # ── Summary ──
@@ -284,11 +400,13 @@ fi
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║        Update Complete!              ║"
-if [ "$UPDATE_BACKEND" = "true" ]; then
-echo "  ║  Backend:  v$BACKEND_LATEST"
-fi
-if [ "$UPDATE_CLIENT" = "true" ]; then
-echo "  ║  Client:   v$CLIENT_LATEST"
+if [ "$UPDATE_METHOD" = "tag" ]; then
+echo "  ║  Product:  v$RELEASE_PRODUCT"
+[ "$HAS_BACKEND" = "true" ] && echo "  ║  Backend:  v$TARGET_BACKEND"
+[ "$HAS_CLIENT" = "true" ] && echo "  ║  Client:   v$TARGET_CLIENT"
+else
+[ "$HAS_BACKEND" = "true" ] && echo "  ║  Backend:  v$(read_pkg_version "$BACKEND_DIR") ($ARG_BRANCH)"
+[ "$HAS_CLIENT" = "true" ] && echo "  ║  Client:   v$(read_pkg_version "$CLIENT_DIR") ($ARG_BRANCH)"
 fi
 echo "  ╚══════════════════════════════════════╝"
 echo ""
