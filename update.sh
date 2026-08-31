@@ -258,6 +258,41 @@ case "$MODE" in
     fi
     UPDATE_METHOD="branch"
     echo "  Updating to latest commit on branch '$ARG_BRANCH'"
+
+    BRANCH_HAS_CHANGES=false
+
+    if [ "$HAS_BACKEND" = "true" ]; then
+      BACKEND_BRANCH_VERSION=$(git -C "$BACKEND_DIR" show "origin/$ARG_BRANCH:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).version" 2>/dev/null || echo "unknown")
+      BACKEND_LOCAL_COMMIT=$(git -C "$BACKEND_DIR" rev-parse --short HEAD 2>/dev/null)
+      BACKEND_REMOTE_COMMIT=$(git -C "$BACKEND_DIR" rev-parse --short "origin/$ARG_BRANCH" 2>/dev/null || echo "unknown")
+      if [ "$BACKEND_LOCAL_COMMIT" != "$BACKEND_REMOTE_COMMIT" ]; then
+        BACKEND_COMMIT_COUNT=$(git -C "$BACKEND_DIR" log --oneline "$BACKEND_LOCAL_COMMIT..$BACKEND_REMOTE_COMMIT" 2>/dev/null | wc -l | tr -d ' ')
+        echo "    Backend:   v$BACKEND_CURRENT → v$BACKEND_BRANCH_VERSION  ($BACKEND_COMMIT_COUNT new commit(s))"
+        BRANCH_HAS_CHANGES=true
+      else
+        echo "    Backend:   v$BACKEND_CURRENT  (up to date)"
+      fi
+    fi
+
+    if [ "$HAS_CLIENT" = "true" ]; then
+      CLIENT_BRANCH_VERSION=$(git -C "$CLIENT_DIR" show "origin/$ARG_BRANCH:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).version" 2>/dev/null || echo "unknown")
+      CLIENT_LOCAL_COMMIT=$(git -C "$CLIENT_DIR" rev-parse --short HEAD 2>/dev/null)
+      CLIENT_REMOTE_COMMIT=$(git -C "$CLIENT_DIR" rev-parse --short "origin/$ARG_BRANCH" 2>/dev/null || echo "unknown")
+      if [ "$CLIENT_LOCAL_COMMIT" != "$CLIENT_REMOTE_COMMIT" ]; then
+        CLIENT_COMMIT_COUNT=$(git -C "$CLIENT_DIR" log --oneline "$CLIENT_LOCAL_COMMIT..$CLIENT_REMOTE_COMMIT" 2>/dev/null | wc -l | tr -d ' ')
+        echo "    Client:    v$CLIENT_CURRENT → v$CLIENT_BRANCH_VERSION  ($CLIENT_COMMIT_COUNT new commit(s))"
+        BRANCH_HAS_CHANGES=true
+      else
+        echo "    Client:    v$CLIENT_CURRENT  (up to date)"
+      fi
+    fi
+
+    if [ "$BRANCH_HAS_CHANGES" = "false" ]; then
+      echo ""
+      echo "  Everything is up to date on '$ARG_BRANCH'!"
+      echo ""
+      exit 0
+    fi
     ;;
 esac
 
