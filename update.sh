@@ -261,6 +261,10 @@ case "$MODE" in
 
     BRANCH_HAS_CHANGES=false
 
+    # Fetch the target branch explicitly
+    [ "$HAS_BACKEND" = "true" ] && sudo git -C "$BACKEND_DIR" fetch origin "$ARG_BRANCH" --quiet &>/dev/null || true
+    [ "$HAS_CLIENT" = "true" ] && sudo git -C "$CLIENT_DIR" fetch origin "$ARG_BRANCH" --quiet &>/dev/null || true
+
     if [ "$HAS_BACKEND" = "true" ]; then
       BACKEND_BRANCH_VERSION=$(git -C "$BACKEND_DIR" show "origin/$ARG_BRANCH:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).version" 2>/dev/null || echo "unknown")
       BACKEND_LOCAL_COMMIT=$(git -C "$BACKEND_DIR" rev-parse --short HEAD 2>/dev/null)
