@@ -374,6 +374,7 @@ if [ "$HAS_BACKEND" = "true" ]; then
     if [ "$CMP" != "eq" ]; then
       echo "── Updating Backend (v$BACKEND_CURRENT → v$TARGET_BACKEND) ──"
       cd "$BACKEND_DIR"
+      sudo git checkout -- package-lock.json 2>/dev/null || true
       sudo git checkout "v$TARGET_BACKEND" --quiet
       echo "Installing dependencies..."
       sudo npm install --production=false 2>&1 | tail -1
@@ -386,6 +387,7 @@ if [ "$HAS_BACKEND" = "true" ]; then
   else
     echo "── Updating Backend (branch: $ARG_BRANCH) ──"
     cd "$BACKEND_DIR"
+    sudo git checkout -- package-lock.json 2>/dev/null || true
     sudo git checkout "$ARG_BRANCH" --quiet 2>/dev/null || sudo git checkout -b "$ARG_BRANCH" "origin/$ARG_BRANCH" --quiet
     sudo git pull origin "$ARG_BRANCH"
     echo "Installing dependencies..."
@@ -407,6 +409,7 @@ if [ "$HAS_CLIENT" = "true" ]; then
     if [ "$CMP" != "eq" ]; then
       echo "── Updating Client (v$CLIENT_CURRENT → v$TARGET_CLIENT) ──"
       cd "$CLIENT_DIR"
+      sudo git checkout -- package-lock.json 2>/dev/null || true
       sudo git checkout "v$TARGET_CLIENT" --quiet
       echo "Installing dependencies..."
       sudo npm install 2>&1 | tail -1
@@ -420,6 +423,7 @@ if [ "$HAS_CLIENT" = "true" ]; then
   else
     echo "── Updating Client (branch: $ARG_BRANCH) ──"
     cd "$CLIENT_DIR"
+    sudo git checkout -- package-lock.json 2>/dev/null || true
     sudo git checkout "$ARG_BRANCH" --quiet 2>/dev/null || sudo git checkout -b "$ARG_BRANCH" "origin/$ARG_BRANCH" --quiet
     sudo git pull origin "$ARG_BRANCH"
     echo "Installing dependencies..."
