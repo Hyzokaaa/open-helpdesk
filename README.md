@@ -261,6 +261,9 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Secret key for authentication tokens |
+| `SESSION_TTL_HOURS` / `SESSION_REMEMBER_TTL_DAYS` | How long a sign-in lasts, without and with "Keep me signed in" (default: 24 hours / 30 days) |
+| `SESSION_ACCESS_TOKEN_EXPIRATION` | Lifetime of access tokens, renewed silently while a session lasts (default: `15m`) |
+| `API_TOKEN_EXCHANGE_EXPIRATION` | Lifetime of tokens the API token exchange issues to integrations (default: `1d`; formerly `JWT_EXPIRATION`, still read) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
 | `DB_PASSWORD` | Database password |
 | `EMAIL_PROVIDER` | Email provider: `resend`, `smtp`, or `postmark` |
