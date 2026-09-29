@@ -375,9 +375,13 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Backend API
+    # Backend API. HTTP/1.1 plus Upgrade/Connection let the live-updates socket
+    # (/api/socket.io) switch to websocket; plain requests pass through unchanged.
     location /api/ {
         proxy_pass http://localhost:$BACKEND_PORT/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$http_connection;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

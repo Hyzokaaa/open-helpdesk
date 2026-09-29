@@ -438,6 +438,27 @@ if [ "$HAS_CLIENT" = "true" ]; then
   fi
 fi
 
+# ── nginx: websocket upgrade for live updates ──
+# Older installs proxy /api/ without the upgrade headers, so live updates fall back to
+# long-polling. That works, but point out the fix; the config is never edited here, since
+# certbot and admins change it.
+
+NGINX_SITE="${NGINX_SITE:-openhelpdesk}"
+for NGINX_CONF in "/etc/nginx/sites-available/$NGINX_SITE.conf" "/etc/nginx/conf.d/$NGINX_SITE.conf"; do
+  if [ -f "$NGINX_CONF" ] && ! grep -qs "http_upgrade" "$NGINX_CONF"; then
+    echo "[NOTE] Live updates are using long-polling because $NGINX_CONF"
+    echo "       does not forward websocket upgrades. To enable websockets, add inside"
+    echo "       'location /api/ { ... }':"
+    echo ""
+    echo "           proxy_http_version 1.1;"
+    echo "           proxy_set_header Upgrade \$http_upgrade;"
+    echo "           proxy_set_header Connection \$http_connection;"
+    echo ""
+    echo "       then run: sudo nginx -t && sudo systemctl reload nginx"
+    echo ""
+  fi
+done
+
 # ── Summary ──
 
 echo ""
