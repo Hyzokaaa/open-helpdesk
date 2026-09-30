@@ -248,7 +248,10 @@ DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
 DB_RUN_MIGRATIONS=true
 JWT_SECRET=$JWT_SECRET
-JWT_EXPIRATION=1d
+API_TOKEN_EXCHANGE_EXPIRATION=1d
+SESSION_ACCESS_TOKEN_EXPIRATION=15m
+SESSION_TTL_HOURS=24
+SESSION_REMEMBER_TTL_DAYS=30
 FRONTEND_URL=$FRONTEND_URL
 STORAGE_PROVIDER=filesystem
 STORAGE_PATH=$INSTALL_DIR/backend/data/storage
@@ -375,9 +378,13 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Backend API
+    # Backend API. HTTP/1.1 plus Upgrade/Connection let the live-updates socket
+    # (/api/socket.io) switch to websocket; plain requests pass through unchanged.
     location /api/ {
         proxy_pass http://localhost:$BACKEND_PORT/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$http_connection;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

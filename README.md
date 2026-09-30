@@ -227,9 +227,13 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Backend API
+    # Backend API. HTTP/1.1 plus Upgrade/Connection let the live-updates socket
+    # (/api/socket.io) switch to websocket; plain requests pass through unchanged.
     location /api/ {
         proxy_pass http://localhost:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -257,6 +261,9 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Secret key for authentication tokens |
+| `SESSION_TTL_HOURS` / `SESSION_REMEMBER_TTL_DAYS` | How long a sign-in lasts, without and with "Keep me signed in" (default: 24 hours / 30 days) |
+| `SESSION_ACCESS_TOKEN_EXPIRATION` | Lifetime of access tokens, renewed silently while a session lasts (default: `15m`) |
+| `API_TOKEN_EXCHANGE_EXPIRATION` | Lifetime of tokens the API token exchange issues to integrations (default: `1d`; formerly `JWT_EXPIRATION`, still read) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
 | `DB_PASSWORD` | Database password |
 | `EMAIL_PROVIDER` | Email provider: `resend`, `smtp`, or `postmark` |
@@ -366,9 +373,13 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Backend API
+    # Backend API. HTTP/1.1 plus Upgrade/Connection let the live-updates socket
+    # (/api/socket.io) switch to websocket; plain requests pass through unchanged.
     location /api/ {
         proxy_pass http://localhost:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $http_connection;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
