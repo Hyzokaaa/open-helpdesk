@@ -1,5 +1,13 @@
 [
   {
+    "product": "1.24.0",
+    "date": "2026-09-29",
+    "components": {
+      "backend": "1.21.0",
+      "client": "1.21.0"
+    }
+  },
+  {
     "product": "1.23.2",
     "date": "2026-09-02",
     "components": {
