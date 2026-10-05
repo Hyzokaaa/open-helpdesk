@@ -52,7 +52,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **File Attachments** — Filesystem or S3-compatible storage, drag & drop, clipboard paste, image lightbox
 - **Tags** — Color-coded tags per workspace for flexible organization
 - **SSO / Token Exchange** — Embed Open Helpdesk in your product with single API call authentication
-- **Google & Microsoft Sign-In** — One-click OAuth login with multi-frontend redirect support
+- **Google Sign-In** — One-click OAuth login with multi-frontend redirect support
 - **Dark Mode** — 5 theme options: System, Light, Light Border, Dark, Dark Deep
 - **i18n** — Full English and Spanish translations, including email templates
 
