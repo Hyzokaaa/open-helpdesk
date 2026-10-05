@@ -34,7 +34,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Audit Log** — Track every action across your workspace with detailed metadata
 - **System Logs** — Admin-level logs for platform-wide visibility into system events
 - **Date & Timezone Preferences** — Per-user date format and timezone settings
-- **Public API & Webhooks** — REST API with scoped API keys and signed webhook events. Interactive docs at `/api/v1/docs` on every instance ([cloud docs](https://api.openhelpdesk.dev/docs))
+- **Public API & Webhooks** — REST API with scoped API keys and signed webhook events. Documentation at `/docs` on every instance ([cloud docs](https://openhelpdesk.dev/docs))
 - **Customer Portal** — Public ticket form, magic link tracking, embeddable widget
 - **Roles & Permissions** — 30+ granular permissions across 4 roles (Admin, Supervisor, Agent, Reporter)
 - **Ticket Followers** — Follow tickets for updates, @mentions auto-add followers with read-only access
