@@ -261,7 +261,7 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | Variable | Description |
 |----------|-------------|
 | `JWT_SECRET` | Secret key for authentication tokens |
-| `SESSION_TTL_HOURS` / `SESSION_REMEMBER_TTL_DAYS` | How long a sign-in lasts, without and with "Keep me signed in" (default: 24 hours / 30 days) |
+| `SESSION_TTL_HOURS` / `SESSION_REMEMBER_TTL_DAYS` | How long a sign-in lasts, without and with "Keep me signed in" (default: 24 hours / 30 days). With "Keep me signed in", the session also opens the workspaces' custom domains without asking for the password again |
 | `SESSION_ACCESS_TOKEN_EXPIRATION` | Lifetime of access tokens, renewed silently while a session lasts (default: `15m`) |
 | `API_TOKEN_EXCHANGE_EXPIRATION` | Lifetime of tokens the API token exchange issues to integrations (default: `1d`; formerly `JWT_EXPIRATION`, still read) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
@@ -269,7 +269,8 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | `EMAIL_PROVIDER` | Email provider: `resend`, `smtp`, or `postmark` |
 | `EMAIL_API_KEY` | API key for Resend (if using Resend provider) |
 | `SMTP_*` | SMTP server for notifications (if using SMTP provider) |
-| `FRONTEND_URL` | Public URL of your deployment |
+| `FRONTEND_URL` | Public URL of your deployment. Custom domains pick up the session of this address |
+| `CUSTOM_DOMAIN_CNAME_TARGET` | Only if workspaces use their own domain: a host of yours that resolves to this server (e.g. `domains.yourcompany.com`). Workspaces point their domain's CNAME to it, the Verify button checks it, and a daily check warns their admins when a domain stops pointing here. Without it, domains can only be added by a system admin, who skips the DNS check |
 | `VITE_API_URL` | Backend URL the client connects to |
 | `VITE_APP_NAME` | App name shown in the UI (default: `Open`) |
 | `VITE_APP_SUBTITLE` | Subtitle shown below the name (default: `Helpdesk`) |
