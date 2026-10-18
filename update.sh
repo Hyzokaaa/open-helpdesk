@@ -148,6 +148,9 @@ if fetch_latest_release; then
   fi
   echo "    Backend:   v$RELEASE_BACKEND"
   echo "    Client:    v$RELEASE_CLIENT"
+  echo ""
+  echo "  Open Helpdesk v$RELEASE_PRODUCT is made of backend v$RELEASE_BACKEND and client v$RELEASE_CLIENT:"
+  echo "  each component has its own version number, so they need not match the product's."
 else
   echo "  [!] Could not fetch release info from GitHub."
   echo "      You can still update from a branch."
