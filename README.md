@@ -25,7 +25,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Ticket Management** — Full lifecycle: create, assign, pick up, transfer, resolve, discard. Priority, categories, custom fields
 - **Kanban Board** — Drag-and-drop board view with custom ordering per column
 - **Transfer Requests** — Agents request ticket transfers, recipients accept or reject
-- **Knowledge Base** — Help articles organized by category, public portal with search, WYSIWYG editor
+- **Knowledge Base** — Help articles organized by category, public portal with search (or private, for the team only), WYSIWYG editor
 - **AI Writing Assistant** — Improve and translate ticket descriptions with any OpenAI-compatible API
 - **Reports & CSAT** — Resolution metrics, agent performance, charts, and customer satisfaction surveys
 - **SLA Tracking** — Response and resolution time targets per priority with automatic breach detection
@@ -35,7 +35,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **System Logs** — Admin-level logs for platform-wide visibility into system events
 - **Date & Timezone Preferences** — Per-user date format and timezone settings
 - **Public API & Webhooks** — REST API with scoped API keys and signed webhook events. Documentation at `/docs` on every instance ([cloud docs](https://openhelpdesk.dev/docs))
-- **Customer Portal** — Public ticket form, magic link tracking, embeddable widget
+- **Customer Portal** — Public ticket form, magic link tracking, embeddable widget; can be closed so that customers sign in instead
 - **Roles & Permissions** — 30+ granular permissions across 4 roles (Admin, Supervisor, Agent, Reporter)
 - **Ticket Followers** — Follow tickets for updates, @mentions auto-add followers with read-only access
 - **Workspaces** — Multi-tenant isolation with custom color palettes and branding
