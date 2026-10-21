@@ -40,7 +40,7 @@ Open Helpdesk is a full-featured, multi-tenant helpdesk system built for teams t
 - **Ticket Followers** — Follow tickets for updates, @mentions auto-add followers with read-only access
 - **Workspaces** — Multi-tenant isolation with custom color palettes and branding
 - **System Email Settings** — Configure SMTP from the Admin UI, no environment variables needed
-- **Custom Email Sender** — Send notifications from your own email address via SMTP
+- **Outgoing sender** — Send notifications from your own email address via SMTP
 - **Invitations** — Invite team members by email, copy invite link, invitation-only signup for selfhosted
 - **Comments & Mentions** — Mention teammates with autocomplete, timestamps on every comment
 - **Email-to-Ticket (IMAP)** — Customers send an email, a ticket is created. Replies become comments. Universal IMAP polling works with any mail server. Import backlog, poll now, pause/resume controls. Configured entirely from the UI
@@ -283,7 +283,7 @@ See [`.env.example`](.env.example) for all available options.
 Let your customers create tickets by sending an email. Works with any mail server via IMAP polling — no webhooks or special server configuration needed.
 
 1. Create a dedicated email account (e.g. `support@yourcompany.com`) with any provider (Gmail, Outlook, your own mail server)
-2. Go to **Workspace Settings → Mailboxes → Connect Mailbox** and enter the IMAP credentials
+2. Go to **Workspace Settings → Email → Incoming mailboxes → Connect Mailbox** and enter the IMAP credentials
 3. Send a test email to that address — a ticket should appear in your dashboard
 
 Everything is configured from the UI. No environment variables needed.
@@ -305,7 +305,7 @@ Everything is configured from the UI. No environment variables needed.
 
 > **Most users don't need this.** This is for operators who run their own mail server and want to route emails from multiple workspaces through a single IMAP account. If you just need email-to-ticket for one workspace, use the standard mailbox setup above.
 
-The Platform Mailbox is a system-level IMAP catch-all that automatically routes emails to the correct workspace based on the recipient address. Instead of configuring IMAP per workspace, you configure one mailbox in **Admin → Settings → Email Receiving** and every workspace gets an email address automatically.
+The Platform Mailbox is a system-level IMAP catch-all that automatically routes emails to the correct workspace based on the recipient address. Instead of configuring IMAP per workspace, you configure one mailbox in **System Settings → Email → Email Receiving** and every workspace gets an email address automatically.
 
 **How it works:**
 
@@ -349,7 +349,7 @@ Configure your MTA to accept all addresses for the domain and deliver to a singl
 
 **Workspace admin controls:**
 
-- Each workspace admin can **disable** the platform mailbox for their workspace (the toggle in Workspace Settings → Mailboxes)
+- Each workspace admin can **disable** the platform mailbox for their workspace (the toggle in Workspace Settings → Email → Incoming mailboxes)
 - Disabling only stops tickets from being created via the platform catch-all — their own IMAP mailboxes continue working independently
 - If the system admin pauses the Platform Mailbox, all workspaces see it as "paused" and the toggle is disabled
 
@@ -404,7 +404,7 @@ You can integrate Open Helpdesk into your own application so your users access t
 
 #### 1. Create an API key
 
-Go to **Workspace Settings → API Keys** and create a key with the **Token exchange (SSO)** scope (`auth:exchange`).
+Go to **Workspace Settings → Integrations → API Keys** and create a key with the **Token exchange (SSO)** scope (`auth:exchange`).
 
 #### 2. Add one endpoint to your backend
 
