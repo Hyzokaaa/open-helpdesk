@@ -112,6 +112,17 @@ You can also install backend and client separately with their own scripts:
 - Backend: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-backend/main/install.sh | bash`
 - Client: `curl -fsSL https://raw.githubusercontent.com/Hyzokaaa/open-helpdesk-client/main/install.sh | bash`
 
+#### Updating
+
+```bash
+bash update.sh                  # interactive
+bash update.sh --release        # latest stable release (recommended)
+bash update.sh --version 1.39.0 # a specific release
+bash update.sh --experimental   # latest development work, before it is released
+```
+
+The experimental channel follows the development branch and may break. Joining it offers to back up the database first (in `/opt/open-helpdesk/backups/`; off unless you say yes), and the install stays on it until `--release` or `--version`. Going back warns when the database has changes the release does not know: restoring a backup from before is then the safe way back. If the server cannot verify GitLab's certificate (an internal network with its own proxy, for instance), `--experimental --insecure` skips that check for GitLab only; it is never remembered, so pass it every time, and only on a network you trust.
+
 #### Manual step-by-step
 
 <details>
@@ -265,6 +276,8 @@ All settings are in `.env`. The defaults work out of the box for local use. For 
 | `SESSION_ACCESS_TOKEN_EXPIRATION` | Lifetime of access tokens, renewed silently while a session lasts (default: `15m`) |
 | `API_TOKEN_EXCHANGE_EXPIRATION` | Lifetime of tokens the API token exchange issues to integrations (default: `1d`; formerly `JWT_EXPIRATION`, still read) |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin credentials |
+| `ALLOW_PRIVATE_NETWORK_URLS` | Set to `false` when workspaces you do not trust use the installation: webhooks and a workspace's own Matrix server may then not point at the private network, so nobody can make the server call your internal network through them. Leave it empty (default) when your Matrix server or webhooks live there. The installation's own settings are never limited |
+| `SECRETS_ENCRYPTION_KEY` | Key for the secrets kept for other services, such as Matrix bot tokens (optional). Without it the key is derived from `JWT_SECRET`, and changing `JWT_SECRET` means connecting the bots again |
 | `DB_PASSWORD` | Database password |
 | `EMAIL_PROVIDER` | Email provider: `resend`, `smtp`, or `postmark` |
 | `EMAIL_API_KEY` | API key for Resend (if using Resend provider) |
